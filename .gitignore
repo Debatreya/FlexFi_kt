@@ -1,0 +1,41 @@
+#*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+#.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+#local.properties
+
+
+#Better gitignore
+# Gradle
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Android build outputs
+/app/build/
+/captures/
+/.externalNativeBuild/
+/.cxx/
+
+#ENV
+/app/google-services.json
