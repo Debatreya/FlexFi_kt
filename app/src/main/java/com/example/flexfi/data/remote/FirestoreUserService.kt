@@ -21,6 +21,24 @@ class FirestoreUserService {
         }
     }
 
+    suspend fun findUserByPhone(phone: String): UserDoc? {
+        return try {
+            val snapshot = firestore.collection("users")
+                .whereEqualTo("phone", phone)
+                .limit(1)
+                .get()
+                .await()
+            if (snapshot.documents.isNotEmpty()) {
+                snapshot.documents[0].toObject(UserDoc::class.java)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("FirestoreUserService", "Error finding user by phone", e)
+            null
+        }
+    }
+
     suspend fun createUser(user: UserDoc) {
         try {
             Log.d("FirestoreUserService", "Creating user in Firestore: ${user.id}")

@@ -1,31 +1,34 @@
 package com.example.flexfi
 
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.room.Room
 import com.example.flexfi.data.local.FlexFiDatabase
-import com.example.flexfi.data.local.entities.UserEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.remote.FirestoreUserService
+import com.example.flexfi.data.repository.ContactRepository
 import com.example.flexfi.data.repository.UserRepository
 import com.example.flexfi.ui.screens.auth.*
-import kotlinx.coroutines.launch
+import com.example.flexfi.ui.screens.contacts.*
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Manual dependency injection for Phase 2
+        // Manual dependency injection
         val db = Room.databaseBuilder(
             applicationContext,
             FlexFiDatabase::class.java,
@@ -35,12 +38,10 @@ class MainActivity : ComponentActivity() {
         val firestoreService = FirestoreUserService()
         val authService = FirebaseAuthService()
         val userRepository = UserRepository(db.userDao(), firestoreService)
-
-        // Sign out user to force OTP login for testing
-        authService.signOut()
+        val contactRepository = ContactRepository(db.contactDao(), firestoreService)
 
         setContent {
-            FlexFiApp(authService, firestoreService, userRepository)
+            FlexFiApp(authService, firestoreService, userRepository, contactRepository)
         }
     }
 }
@@ -49,14 +50,19 @@ class MainActivity : ComponentActivity() {
 fun FlexFiApp(
     authService: FirebaseAuthService,
     firestoreService: FirestoreUserService,
-    userRepository: UserRepository
+    userRepository: UserRepository,
+    contactRepository: ContactRepository
 ) {
     val navController = rememberNavController()
+    
     val authViewModel: AuthViewModel = viewModel(
         factory = AuthViewModelFactory(authService, firestoreService, userRepository)
     )
+    
+    val contactViewModel: ContactViewModel = viewModel(
+        factory = ContactViewModelFactory(contactRepository, authService)
+    )
 
-    // Check initial destination
     val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
 
     MaterialTheme {
@@ -93,33 +99,80 @@ fun FlexFiApp(
                     )
                 }
                 composable("home") {
-                    HomeScreen(authService, onLogout = {
-                        navController.navigate("login") {
-                            popUpTo("home") { inclusive = true }
+                    HomeScreen(
+                        authService = authService,
+                        onLogout = {
+                            navController.navigate("login") {
+                                popUpTo("home") { inclusive = true }
+                            }
+                        },
+                        onNavigateToContacts = {
+                            navController.navigate("contacts")
                         }
-                    })
+                    )
+                }
+                composable("contacts") {
+                    ContactsScreen(
+                        viewModel = contactViewModel,
+                        onAddContactClick = { navController.navigate("add_contact") }
+                    )
+                }
+                composable("add_contact") {
+                    AddContactScreen(
+                        viewModel = contactViewModel,
+                        onContactAdded = { navController.popBackStack() }
+                    )
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(authService: FirebaseAuthService, onLogout: () -> Unit) {
-    Surface {
-        androidx.compose.foundation.layout.Column {
-            Text("Welcome to FlexFi Home! 🚀")
-            Button(onClick = {
-                authService.signOut()
-                onLogout()
-            }) {
+fun HomeScreen(
+    authService: FirebaseAuthService, 
+    onLogout: () -> Unit,
+    onNavigateToContacts: () -> Unit
+) {
+    Scaffold(
+        topBar = { 
+            TopAppBar(
+                title = { Text("FlexFi Home 🚀") }
+            ) 
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Button(
+                onClick = onNavigateToContacts,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Person, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Manage Contacts")
+            }
+
+            Button(
+                onClick = {
+                    authService.signOut()
+                    onLogout()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
                 Text("Logout")
             }
         }
     }
 }
 
-// Simple Factory for AuthViewModel
+// Factories for ViewModels
 class AuthViewModelFactory(
     private val authService: FirebaseAuthService,
     private val firestoreService: FirestoreUserService,
@@ -127,5 +180,14 @@ class AuthViewModelFactory(
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         return AuthViewModel(authService, firestoreService, userRepository) as T
+    }
+}
+
+class ContactViewModelFactory(
+    private val contactRepository: ContactRepository,
+    private val authService: FirebaseAuthService
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return ContactViewModel(contactRepository, authService) as T
     }
 }

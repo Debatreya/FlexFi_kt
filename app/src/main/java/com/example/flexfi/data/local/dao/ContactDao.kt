@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.example.flexfi.data.local.entities.ContactEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -14,4 +15,13 @@ interface ContactDao {
 
     @Query("SELECT * FROM contacts")
     fun getAllContacts(): Flow<List<ContactEntity>>
+
+    @Query("SELECT * FROM contacts")
+    suspend fun getAllContactsSync(): List<ContactEntity>
+
+    @Query("SELECT * FROM contacts WHERE phone = :phone LIMIT 1")
+    suspend fun getContactByPhone(phone: String): ContactEntity?
+
+    @Update
+    suspend fun updateContact(contact: ContactEntity)
 }
