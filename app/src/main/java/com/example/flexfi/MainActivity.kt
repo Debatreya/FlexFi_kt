@@ -4,16 +4,20 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.room.Room
 import com.example.flexfi.data.local.FlexFiDatabase
-import com.example.flexfi.data.local.entities.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import com.example.flexfi.data.local.entities.UserEntity
+import com.example.flexfi.data.remote.FirebaseAuthService
+import com.example.flexfi.data.remote.FirestoreUserService
+import com.example.flexfi.data.repository.UserRepository
+import com.example.flexfi.ui.screens.auth.*
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -21,115 +25,107 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize Database
+        // Manual dependency injection for Phase 2
         val db = Room.databaseBuilder(
             applicationContext,
             FlexFiDatabase::class.java,
             "flexfi_db"
         ).fallbackToDestructiveMigration().build()
 
-        // Run Tests
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                testDatabase(db)
-            } catch (e: Exception) {
-                Log.e("PHASE1_TEST", "Test failed", e)
-            }
-        }
+        val firestoreService = FirestoreUserService()
+        val authService = FirebaseAuthService()
+        val userRepository = UserRepository(db.userDao(), firestoreService)
+
+        // Sign out user to force OTP login for testing
+        authService.signOut()
 
         setContent {
-            FlexFiApp()
+            FlexFiApp(authService, firestoreService, userRepository)
         }
-    }
-
-    private suspend fun testDatabase(db: FlexFiDatabase) {
-        val userDao = db.userDao()
-        val contactDao = db.contactDao()
-        val groupDao = db.groupDao()
-        val expenseDao = db.expenseDao()
-
-        // 1. Test Users
-        val user = UserEntity(
-            id = "user_001",
-            name = "Deb",
-            phone = "9999999999",
-            email = "deb@flexfi.com",
-            joinedAt = System.currentTimeMillis(),
-            streakCount = 5,
-            totalExpense = 1500.0
-        )
-        userDao.insertUser(user)
-        val fetchedUser = userDao.getUser("user_001")
-        Log.d("PHASE1_TEST", "USER TEST: $fetchedUser")
-
-        // 2. Test Contacts
-        val contact = ContactEntity(
-            id = "contact_001",
-            name = "Rahul",
-            phone = "8888888888",
-            createdBy = "user_001",
-            isGhost = true,
-            linkedUserId = null
-        )
-        contactDao.insertContact(contact)
-        val contacts = contactDao.getAllContacts().first()
-        Log.d("PHASE1_TEST", "CONTACT TEST: Found ${contacts.size} contacts. First: ${contacts.firstOrNull()?.name}")
-
-        // 3. Test Groups
-        val group = GroupEntity(
-            id = "group_001",
-            name = "Trip to Goa",
-            createdBy = "user_001",
-            createdAt = System.currentTimeMillis(),
-            totalExpense = 0.0
-        )
-        groupDao.insertGroup(group)
-        
-        val member = GroupMemberEntity(
-            groupId = "group_001",
-            memberId = "contact_001",
-            memberType = "CONTACT",
-            joinedAt = System.currentTimeMillis()
-        )
-        groupDao.insertMember(member)
-        val groups = groupDao.getAllGroups().first()
-        Log.d("PHASE1_TEST", "GROUP TEST: Found ${groups.size} groups. First: ${groups.firstOrNull()?.name}")
-
-        // 4. Test Expenses
-        val expense = ExpenseEntity(
-            id = "exp_001",
-            title = "Dinner at Britto's",
-            groupId = "group_001",
-            amount = 1200.0,
-            paidBy = "user_001",
-            category = "Food",
-            timestamp = System.currentTimeMillis(),
-            createdBy = "user_001",
-            isSynced = false
-        )
-        expenseDao.insertExpense(expense)
-
-        val split = ExpenseSplitEntity(
-            id = "split_001",
-            expenseId = "exp_001",
-            memberId = "contact_001",
-            owedAmount = 600.0,
-            status = "PENDING"
-        )
-        expenseDao.insertSplit(split)
-
-        val expenses = expenseDao.getAllExpenses().first()
-        Log.d("PHASE1_TEST", "EXPENSE TEST: Found ${expenses.size} expenses. Last Title: ${expenses.firstOrNull()?.title}")
-
-        Log.d("PHASE1_TEST", "✅ ALL PHASE 1 DATABASE TESTS PASSED")
     }
 }
 
 @Composable
-fun FlexFiApp() {
+fun FlexFiApp(
+    authService: FirebaseAuthService,
+    firestoreService: FirestoreUserService,
+    userRepository: UserRepository
+) {
+    val navController = rememberNavController()
+    val authViewModel: AuthViewModel = viewModel(
+        factory = AuthViewModelFactory(authService, firestoreService, userRepository)
+    )
+
+    // Check initial destination
+    val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
+
     MaterialTheme {
         Surface {
-            Text("FlexFi 🚀 Phase 1 Testing...")
+            NavHost(navController = navController, startDestination = startDestination) {
+                composable("login") {
+                    LoginScreen(
+                        viewModel = authViewModel,
+                        onCodeSent = { navController.navigate("otp") }
+                    )
+                }
+                composable("otp") {
+                    OtpScreen(
+                        viewModel = authViewModel,
+                        onVerified = { state ->
+                            if (state is AuthState.NewUser) {
+                                navController.navigate("profile_setup")
+                            } else {
+                                navController.navigate("home") {
+                                    popUpTo("login") { inclusive = true }
+                                }
+                            }
+                        }
+                    )
+                }
+                composable("profile_setup") {
+                    ProfileSetupScreen(
+                        viewModel = authViewModel,
+                        onComplete = {
+                            navController.navigate("home") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        }
+                    )
+                }
+                composable("home") {
+                    HomeScreen(authService, onLogout = {
+                        navController.navigate("login") {
+                            popUpTo("home") { inclusive = true }
+                        }
+                    })
+                }
+            }
         }
+    }
+}
+
+@Composable
+fun HomeScreen(authService: FirebaseAuthService, onLogout: () -> Unit) {
+    Surface {
+        androidx.compose.foundation.layout.Column {
+            Text("Welcome to FlexFi Home! 🚀")
+            Button(onClick = {
+                authService.signOut()
+                onLogout()
+            }) {
+                Text("Logout")
+            }
+        }
+    }
+}
+
+// Simple Factory for AuthViewModel
+class AuthViewModelFactory(
+    private val authService: FirebaseAuthService,
+    private val firestoreService: FirestoreUserService,
+    private val userRepository: UserRepository
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return AuthViewModel(authService, firestoreService, userRepository) as T
     }
 }
