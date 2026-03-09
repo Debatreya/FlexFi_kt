@@ -8,7 +8,6 @@ data class ExpenseSplitEntity(
     @PrimaryKey
     val id: String,
     val expenseId: String,
-    val memberId: String,
-    val owedAmount: Double,
-    val status: String
+    val memberPhone: String,
+    val shareAmount: Double
 )

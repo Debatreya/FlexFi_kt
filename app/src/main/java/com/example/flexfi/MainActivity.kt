@@ -27,9 +27,12 @@ import com.example.flexfi.data.remote.FirestoreUserService
 import com.example.flexfi.data.repository.ContactRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.UserRepository
+import com.example.flexfi.data.repository.ExpenseRepository
+import com.example.flexfi.data.remote.FirestoreExpenseService
 import com.example.flexfi.ui.screens.auth.*
 import com.example.flexfi.ui.screens.contacts.*
 import com.example.flexfi.ui.screens.groups.*
+import com.example.flexfi.ui.screens.expenses.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -49,10 +52,12 @@ class MainActivity : ComponentActivity() {
 
         val firestoreService = FirestoreUserService()
         val firestoreGroupService = FirestoreGroupService()
+        val firestoreExpenseService = FirestoreExpenseService()
         val authService = FirebaseAuthService()
         val userRepository = UserRepository(db.userDao(), firestoreService)
         val contactRepository = ContactRepository(db.contactDao(), firestoreService)
         val groupRepository = GroupRepository(db.groupDao(), db.contactDao(), firestoreGroupService)
+        val expenseRepository = ExpenseRepository(db.expenseDao(), firestoreExpenseService)
 
         setContent {
             FlexFiApp(
@@ -61,6 +66,7 @@ class MainActivity : ComponentActivity() {
                 userRepository, 
                 contactRepository, 
                 groupRepository,
+                expenseRepository,
                 onLogoutRequested = {
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
@@ -69,6 +75,8 @@ class MainActivity : ComponentActivity() {
                             db.userDao().deleteAllUsers()
                             db.groupDao().deleteAllGroups()
                             db.groupDao().deleteAllGroupMembers()
+                            db.expenseDao().deleteAllExpenses()
+                            db.expenseDao().deleteAllSplits()
                         }
                     }
                 }
@@ -84,6 +92,7 @@ fun FlexFiApp(
     userRepository: UserRepository,
     contactRepository: ContactRepository,
     groupRepository: GroupRepository,
+    expenseRepository: ExpenseRepository,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
@@ -98,6 +107,10 @@ fun FlexFiApp(
 
     val groupViewModel: GroupViewModel = viewModel(
         factory = GroupViewModelFactory(groupRepository, contactRepository, authService)
+    )
+
+    val expenseViewModel: ExpenseViewModel = viewModel(
+        factory = ExpenseViewModelFactory(expenseRepository, groupRepository)
     )
 
     val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
@@ -183,8 +196,10 @@ fun FlexFiApp(
                     GroupDetailScreen(
                         groupId = groupId,
                         viewModel = groupViewModel,
+                        expenseViewModel = expenseViewModel,
                         onEditClick = { id -> navController.navigate("edit_group/$id") },
-                        onDeleteSuccess = { navController.popBackStack() }
+                        onDeleteSuccess = { navController.popBackStack() },
+                        onAddExpenseClick = { id -> navController.navigate("add_expense/$id") }
                     )
                 }
                 composable(
@@ -197,6 +212,18 @@ fun FlexFiApp(
                         groupViewModel = groupViewModel,
                         contactViewModel = contactViewModel,
                         onGroupUpdated = { navController.popBackStack() }
+                    )
+                }
+                composable(
+                    route = "add_expense/{groupId}",
+                    arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
+                    AddExpenseScreen(
+                        groupId = groupId,
+                        expenseViewModel = expenseViewModel,
+                        groupViewModel = groupViewModel,
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -288,5 +315,15 @@ class GroupViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         return GroupViewModel(groupRepository, contactRepository, authService) as T
+    }
+}
+
+class ExpenseViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val groupRepository: GroupRepository
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return ExpenseViewModel(expenseRepository, groupRepository) as T
     }
 }
