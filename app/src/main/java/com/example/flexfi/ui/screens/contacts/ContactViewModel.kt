@@ -29,9 +29,15 @@ class ContactViewModel(
     }
 
     fun addContact(name: String, phone: String) {
-        val currentUserId = authService.getCurrentUser()?.uid ?: return
+        val userPhone = authService.getCurrentUser()?.phoneNumber ?: return
         viewModelScope.launch {
-            contactRepository.addContact(name, phone, currentUserId)
+            contactRepository.addContact(name, phone, userPhone)
+        }
+    }
+
+    fun deleteContact(contactId: String) {
+        viewModelScope.launch {
+            contactRepository.deleteContact(contactId)
         }
     }
 }

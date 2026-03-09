@@ -3,7 +3,8 @@ package com.example.flexfi.data.repository
 import com.example.flexfi.data.local.dao.UserDao
 import com.example.flexfi.data.local.entities.UserEntity
 import com.example.flexfi.data.remote.FirestoreUserService
-import com.example.flexfi.data.remote.firestoreModels.UserDoc
+import com.example.flexfi.data.remote.firestoreModels.UserDoc // Added import
+import kotlinx.coroutines.flow.Flow
 
 class UserRepository(
     private val userDao: UserDao,
@@ -11,6 +12,8 @@ class UserRepository(
 ) {
     suspend fun insertUser(user: UserEntity) = userDao.insertUser(user)
     
+    fun getCurrentUserFlow(): Flow<UserEntity?> = userDao.getCurrentUserFlow()
+
     suspend fun getUser(id: String) = userDao.getUser(id)
 
     suspend fun syncUser(uid: String) {
