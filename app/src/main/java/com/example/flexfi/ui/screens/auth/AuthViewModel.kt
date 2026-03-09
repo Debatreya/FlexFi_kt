@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.remote.FirestoreUserService
 import com.example.flexfi.data.remote.firestoreModels.UserDoc
+import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.UserRepository
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.PhoneAuthCredential
@@ -29,7 +30,8 @@ sealed class AuthState {
 class AuthViewModel(
     private val authService: FirebaseAuthService,
     private val firestoreService: FirestoreUserService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val groupRepository: GroupRepository? = null
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
@@ -79,6 +81,11 @@ class AuthViewModel(
             val userDoc = firestoreService.getUser(uid)
             if (userDoc != null) {
                 userRepository.syncUser(uid)
+                // Sync groups on login (spec: Group Sync on Login)
+                val phone = authService.getCurrentUser()?.phoneNumber
+                if (phone != null) {
+                    groupRepository?.syncGroupsForUser(phone)
+                }
                 _authState.value = AuthState.UserExists
             } else {
                 _authState.value = AuthState.NewUser

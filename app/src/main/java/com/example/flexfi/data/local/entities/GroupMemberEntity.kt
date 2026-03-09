@@ -4,11 +4,10 @@ import androidx.room.Entity
 
 @Entity(
     tableName = "group_members",
-    primaryKeys = ["groupId", "memberId"]
+    primaryKeys = ["groupId", "phone"]
 )
 data class GroupMemberEntity(
     val groupId: String,
-    val memberId: String,
-    val memberType: String, // USER or CONTACT
+    val phone: String, // Global Identity
     val joinedAt: Long
 )

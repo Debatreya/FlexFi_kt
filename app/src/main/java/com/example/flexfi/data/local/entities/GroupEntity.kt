@@ -8,7 +8,8 @@ data class GroupEntity(
     @PrimaryKey
     val id: String,
     val name: String,
-    val createdBy: String,
+    val createdByPhone: String,
+    val adminPhone: String,
     val createdAt: Long,
     val totalExpense: Double
 )

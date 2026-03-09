@@ -13,7 +13,14 @@ class ContactRepository(
     fun getAllContacts(): Flow<List<ContactEntity>> = contactDao.getAllContacts()
 
     suspend fun addContact(name: String, phone: String, createdBy: String) {
-        // Search Firestore if user exists
+        // Spec §14: if phone already exists, update name instead of creating duplicate
+        val existing = contactDao.getContactByPhone(phone)
+        if (existing != null) {
+            contactDao.updateContact(existing.copy(name = name))
+            return
+        }
+
+        // Search Firestore if user exists (ghost detection)
         val firebaseUser = firestoreService.findUserByPhone(phone)
 
         val contact = if (firebaseUser != null) {
@@ -21,18 +28,20 @@ class ContactRepository(
                 id = UUID.randomUUID().toString(),
                 name = name,
                 phone = phone,
-                createdBy = createdBy,
+                createdBy = createdBy, // phone number of logged-in user
                 isGhost = false,
-                linkedUserId = firebaseUser.id
+                linkedUserId = firebaseUser.id,
+                createdAt = System.currentTimeMillis()
             )
         } else {
             ContactEntity(
                 id = UUID.randomUUID().toString(),
                 name = name,
                 phone = phone,
-                createdBy = createdBy,
+                createdBy = createdBy, // phone number of logged-in user
                 isGhost = true,
-                linkedUserId = null
+                linkedUserId = null,
+                createdAt = System.currentTimeMillis()
             )
         }
 
@@ -67,5 +76,9 @@ class ContactRepository(
                 contactDao.updateContact(updatedContact)
             }
         }
+    }
+
+    suspend fun deleteContact(contactId: String) {
+        contactDao.deleteContact(contactId)
     }
 }

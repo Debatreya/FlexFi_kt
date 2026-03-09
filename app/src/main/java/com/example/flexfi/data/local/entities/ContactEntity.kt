@@ -9,7 +9,8 @@ data class ContactEntity(
     val id: String,
     val name: String,
     val phone: String,
-    val createdBy: String,
+    val createdBy: String, // phone number of logged-in user (NOT firebase UID)
     val isGhost: Boolean,
-    val linkedUserId: String?
+    val linkedUserId: String?,
+    val createdAt: Long
 )
