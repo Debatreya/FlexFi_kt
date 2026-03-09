@@ -34,6 +34,8 @@ import com.example.flexfi.ui.screens.auth.*
 import com.example.flexfi.ui.screens.contacts.*
 import com.example.flexfi.ui.screens.groups.*
 import com.example.flexfi.ui.screens.expenses.*
+import com.example.flexfi.ui.screens.personal.AddPersonalExpenseScreen
+import com.example.flexfi.ui.screens.personal.EditPersonalExpenseScreen
 import com.example.flexfi.ui.screens.personal.PersonalDashboardScreen
 import com.example.flexfi.ui.screens.personal.PersonalExpenseViewModel
 import kotlinx.coroutines.Dispatchers
@@ -244,6 +246,28 @@ fun FlexFiApp(
                 }
                 composable("personal_dashboard") {
                     PersonalDashboardScreen(
+                        viewModel = personalExpenseViewModel,
+                        onBack = { navController.popBackStack() },
+                        onAddExpenseClick = { navController.navigate("add_personal_expense") },
+                        onExpenseClick = { expense ->
+                            navController.navigate("edit_personal_expense/${expense.id}")
+                        }
+                    )
+                }
+                composable("add_personal_expense") {
+                    AddPersonalExpenseScreen(
+                        viewModel = personalExpenseViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable(
+                    route = "edit_personal_expense/{expenseId}",
+                    arguments = listOf(navArgument("expenseId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val expenseId = backStackEntry.arguments?.getString("expenseId") ?: return@composable
+                    val expense = personalExpenseViewModel.findExpenseById(expenseId) ?: return@composable
+                    EditPersonalExpenseScreen(
+                        expense = expense,
                         viewModel = personalExpenseViewModel,
                         onBack = { navController.popBackStack() }
                     )
