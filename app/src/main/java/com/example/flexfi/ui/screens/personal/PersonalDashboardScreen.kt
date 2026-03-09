@@ -1,9 +1,11 @@
 package com.example.flexfi.ui.screens.personal
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +19,9 @@ import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 @Composable
 fun PersonalDashboardScreen(
     viewModel: PersonalExpenseViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onAddExpenseClick: () -> Unit,
+    onExpenseClick: (PersonalExpenseEntity) -> Unit
 ) {
     val expenses by viewModel.expenses.collectAsState()
     val totalSpent by viewModel.totalSpent.collectAsState()
@@ -42,6 +46,11 @@ fun PersonalDashboardScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAddExpenseClick) {
+                Icon(Icons.Default.Add, contentDescription = "Add Expense")
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -95,7 +104,7 @@ fun PersonalDashboardScreen(
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            categoryTotals.forEach { (category, amount) ->
+                            categoryTotals.entries.forEachIndexed { index, (category, amount) ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -112,7 +121,7 @@ fun PersonalDashboardScreen(
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
-                                if (category != categoryTotals.keys.last()) {
+                                if (index < categoryTotals.size - 1) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
                                 }
                             }
@@ -131,8 +140,13 @@ fun PersonalDashboardScreen(
                     )
                 }
                 items(expenses) { expense ->
-                    PersonalExpenseItem(expense)
+                    PersonalExpenseItem(
+                        expense = expense,
+                        onClick = { onExpenseClick(expense) }
+                    )
                 }
+                // Bottom padding so FAB doesn't overlap last item
+                item { Spacer(Modifier.height(80.dp)) }
             } else {
                 item {
                     Box(
@@ -142,23 +156,26 @@ fun PersonalDashboardScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No personal expenses yet.\nJoin a group and add an expense!",
+                            text = "No expenses yet.\nTap + to add your first expense!",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
-
-            item { Spacer(Modifier.height(16.dp)) }
         }
     }
 }
 
 @Composable
-private fun PersonalExpenseItem(expense: PersonalExpenseEntity) {
+private fun PersonalExpenseItem(
+    expense: PersonalExpenseEntity,
+    onClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
@@ -176,11 +193,33 @@ private fun PersonalExpenseItem(expense: PersonalExpenseEntity) {
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                Text(
-                    text = expense.category,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = expense.category,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // Source badge
+                    val badgeLabel = if (expense.source == "GROUP") "Group" else "Personal"
+                    val badgeColor = if (expense.source == "GROUP")
+                        MaterialTheme.colorScheme.tertiary
+                    else
+                        MaterialTheme.colorScheme.secondary
+                    Surface(
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = badgeColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = badgeLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = badgeColor,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
             Text(
                 text = "₹${"%.2f".format(expense.amount)}",
