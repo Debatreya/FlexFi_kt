@@ -1,7 +1,8 @@
 package com.example.flexfi.domain.models
 
 data class ExpenseSplit(
-    val userId: String = "",
-    val amount: Double = 0.0,
-    val isPaid: Boolean = false
+    val id: String = "",
+    val expenseId: String = "",
+    val memberPhone: String = "",
+    val shareAmount: Double = 0.0
 )

@@ -26,7 +26,7 @@ import com.example.flexfi.data.local.entities.UserEntity
         CategoryEntity::class,
         StreakEntity::class
     ],
-    version = 5, // Bumped to 5 for ContactEntity createdAt field
+    version = 6, // Bumped to 6 for ExpenseEntity schema changes
     exportSchema = false
 )
 abstract class FlexFiDatabase : RoomDatabase() {

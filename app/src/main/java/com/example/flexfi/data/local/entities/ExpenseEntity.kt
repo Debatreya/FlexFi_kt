@@ -7,12 +7,10 @@ import androidx.room.PrimaryKey
 data class ExpenseEntity(
     @PrimaryKey
     val id: String,
+    val groupId: String,
     val title: String,
-    val groupId: String?,
     val amount: Double,
-    val paidBy: String,
+    val paidByPhone: String,
     val category: String,
-    val timestamp: Long,
-    val createdBy: String,
-    val isSynced: Boolean
+    val createdAt: Long
 )
