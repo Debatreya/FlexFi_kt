@@ -1,8 +1,10 @@
 package com.example.flexfi.data.repository
 
 import com.example.flexfi.data.local.dao.ExpenseDao
+import com.example.flexfi.data.local.dao.PersonalExpenseDao
 import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.ExpenseSplitEntity
+import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 import com.example.flexfi.data.remote.FirestoreExpenseService
 import com.example.flexfi.data.remote.firestoreModels.ExpenseDoc
 import com.example.flexfi.data.remote.firestoreModels.SplitDoc
@@ -20,7 +22,8 @@ data class Settlement(
 
 class ExpenseRepository(
     private val expenseDao: ExpenseDao,
-    private val firestoreExpenseService: FirestoreExpenseService
+    private val firestoreExpenseService: FirestoreExpenseService,
+    private val personalExpenseDao: PersonalExpenseDao
 ) {
 
     // ──────────────────────────────────────────────
@@ -53,7 +56,7 @@ class ExpenseRepository(
             title = title,
             amount = amount,
             paidByPhone = paidByPhone,
-            category = category.ifBlank { "General" },
+            category = category.ifBlank { "Other" },
             createdAt = now
         )
 
@@ -112,6 +115,9 @@ class ExpenseRepository(
         expenseDao.insertExpense(expense)
         expenseDao.insertSplits(splits)
 
+        // Generate personal expense records for every participant (offline-first, Room-only)
+        createPersonalExpenses(expense, splits)
+
         // Push to Firestore
         val expenseDoc = ExpenseDoc(
             id = expenseId,
@@ -143,9 +149,10 @@ class ExpenseRepository(
     suspend fun syncExpensesForGroup(groupId: String) {
         val remoteDocs = firestoreExpenseService.getExpensesForGroup(groupId)
 
-        // Clear local cache for this group
+        // Clear local cache for this group (both group expenses and their personal mirrors)
         expenseDao.deleteSplitsForGroup(groupId)
         expenseDao.deleteExpensesForGroup(groupId)
+        personalExpenseDao.deleteBySourceGroupId(groupId)
 
         // Re-populate from Firestore
         remoteDocs.forEach { doc ->
@@ -155,7 +162,7 @@ class ExpenseRepository(
                 title = doc.title,
                 amount = doc.amount,
                 paidByPhone = doc.paidByPhone,
-                category = doc.category,
+                category = doc.category.takeIf { it.isNotBlank() } ?: "Other",
                 createdAt = doc.createdAt
             )
             expenseDao.insertExpense(entity)
@@ -169,6 +176,9 @@ class ExpenseRepository(
                 )
             }
             expenseDao.insertSplits(splits)
+
+            // Rebuild personal expense mirrors from synced data
+            createPersonalExpenses(entity, splits)
         }
     }
 
@@ -248,5 +258,53 @@ class ExpenseRepository(
         }
 
         return settlements
+    }
+
+    // ──────────────────────────────────────────────
+    //  PERSONAL EXPENSE MIRROR
+    // ──────────────────────────────────────────────
+
+    /**
+     * Creates one [PersonalExpenseEntity] per split, recording each member's
+     * individual share as a personal expense record in the local DB.
+     *
+     * Called after splits are written in [addExpense] and [syncExpensesForGroup].
+     */
+    private suspend fun createPersonalExpenses(
+        expense: ExpenseEntity,
+        splits: List<ExpenseSplitEntity>
+    ) {
+        splits.forEach { split ->
+            val personal = PersonalExpenseEntity(
+                id = UUID.randomUUID().toString(),
+                userPhone = split.memberPhone,
+                amount = split.shareAmount,
+                category = expense.category,
+                source = "GROUP",
+                sourceExpenseId = expense.id,
+                sourceGroupId = expense.groupId,
+                description = expense.title,
+                createdAt = expense.createdAt
+            )
+            personalExpenseDao.insert(personal)
+        }
+    }
+
+    // ──────────────────────────────────────────────
+    //  DELETE
+    // ──────────────────────────────────────────────
+
+    /**
+     * Deletes a single expense and all its associated data:
+     * - expense_splits rows for this expense
+     * - the expense row itself
+     * - personal_expenses mirrors created from this expense
+     */
+    suspend fun deleteExpense(expenseId: String) {
+        // Remove splits first (FK-safe ordering)
+        expenseDao.deleteSplitsByExpenseId(expenseId)
+        expenseDao.deleteExpenseById(expenseId)
+        // Remove the personal mirrors that were created from this expense
+        personalExpenseDao.deleteBySourceExpenseId(expenseId)
     }
 }
