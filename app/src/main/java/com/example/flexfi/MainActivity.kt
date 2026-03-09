@@ -28,11 +28,14 @@ import com.example.flexfi.data.repository.ContactRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.UserRepository
 import com.example.flexfi.data.repository.ExpenseRepository
+import com.example.flexfi.data.repository.PersonalExpenseRepository
 import com.example.flexfi.data.remote.FirestoreExpenseService
 import com.example.flexfi.ui.screens.auth.*
 import com.example.flexfi.ui.screens.contacts.*
 import com.example.flexfi.ui.screens.groups.*
 import com.example.flexfi.ui.screens.expenses.*
+import com.example.flexfi.ui.screens.personal.PersonalDashboardScreen
+import com.example.flexfi.ui.screens.personal.PersonalExpenseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -57,7 +60,12 @@ class MainActivity : ComponentActivity() {
         val userRepository = UserRepository(db.userDao(), firestoreService)
         val contactRepository = ContactRepository(db.contactDao(), firestoreService)
         val groupRepository = GroupRepository(db.groupDao(), db.contactDao(), firestoreGroupService)
-        val expenseRepository = ExpenseRepository(db.expenseDao(), firestoreExpenseService)
+        val personalExpenseRepository = PersonalExpenseRepository(db.personalExpenseDao())
+        val expenseRepository = ExpenseRepository(
+            db.expenseDao(),
+            firestoreExpenseService,
+            db.personalExpenseDao()
+        )
 
         setContent {
             FlexFiApp(
@@ -67,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 contactRepository, 
                 groupRepository,
                 expenseRepository,
+                personalExpenseRepository,
                 onLogoutRequested = {
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
@@ -77,6 +86,7 @@ class MainActivity : ComponentActivity() {
                             db.groupDao().deleteAllGroupMembers()
                             db.expenseDao().deleteAllExpenses()
                             db.expenseDao().deleteAllSplits()
+                            db.personalExpenseDao().deleteAll()
                         }
                     }
                 }
@@ -93,6 +103,7 @@ fun FlexFiApp(
     contactRepository: ContactRepository,
     groupRepository: GroupRepository,
     expenseRepository: ExpenseRepository,
+    personalExpenseRepository: PersonalExpenseRepository,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
@@ -111,6 +122,10 @@ fun FlexFiApp(
 
     val expenseViewModel: ExpenseViewModel = viewModel(
         factory = ExpenseViewModelFactory(expenseRepository, groupRepository)
+    )
+
+    val personalExpenseViewModel: PersonalExpenseViewModel = viewModel(
+        factory = PersonalExpenseViewModelFactory(personalExpenseRepository, authService)
     )
 
     val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
@@ -159,6 +174,7 @@ fun FlexFiApp(
                         },
                         onNavigateToContacts = { navController.navigate("contacts") },
                         onNavigateToGroups = { navController.navigate("groups") },
+                        onNavigateToPersonal = { navController.navigate("personal_dashboard") },
                         userRepository = userRepository
                     )
                 }
@@ -226,6 +242,12 @@ fun FlexFiApp(
                         onBack = { navController.popBackStack() }
                     )
                 }
+                composable("personal_dashboard") {
+                    PersonalDashboardScreen(
+                        viewModel = personalExpenseViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }
@@ -238,6 +260,7 @@ fun HomeScreen(
     onLogout: () -> Unit,
     onNavigateToContacts: () -> Unit,
     onNavigateToGroups: () -> Unit,
+    onNavigateToPersonal: () -> Unit,
     userRepository: UserRepository
 ) {
     val currentUser by userRepository.getCurrentUserFlow().collectAsState(initial = null)
@@ -268,6 +291,15 @@ fun HomeScreen(
                 Icon(Icons.Default.Person, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Manage Contacts")
+            }
+
+            Button(
+                onClick = onNavigateToPersonal,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Person, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("My Spending")
             }
 
             Button(
@@ -325,5 +357,15 @@ class ExpenseViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         return ExpenseViewModel(expenseRepository, groupRepository) as T
+    }
+}
+
+class PersonalExpenseViewModelFactory(
+    private val personalExpenseRepository: PersonalExpenseRepository,
+    private val authService: FirebaseAuthService
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return PersonalExpenseViewModel(personalExpenseRepository, authService) as T
     }
 }

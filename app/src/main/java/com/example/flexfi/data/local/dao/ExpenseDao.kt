@@ -48,6 +48,12 @@ interface ExpenseDao {
     """)
     suspend fun deleteSplitsForGroup(groupId: String)
 
+    @Query("DELETE FROM expenses WHERE id = :expenseId")
+    suspend fun deleteExpenseById(expenseId: String)
+
+    @Query("DELETE FROM expense_splits WHERE expenseId = :expenseId")
+    suspend fun deleteSplitsByExpenseId(expenseId: String)
+
     @Query("DELETE FROM expenses")
     suspend fun deleteAllExpenses()
 

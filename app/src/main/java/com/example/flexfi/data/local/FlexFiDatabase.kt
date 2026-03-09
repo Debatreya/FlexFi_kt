@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import com.example.flexfi.data.local.dao.ContactDao
 import com.example.flexfi.data.local.dao.ExpenseDao
 import com.example.flexfi.data.local.dao.GroupDao
+import com.example.flexfi.data.local.dao.PersonalExpenseDao
 import com.example.flexfi.data.local.dao.UserDao
 import com.example.flexfi.data.local.entities.CategoryEntity
 import com.example.flexfi.data.local.entities.ContactEntity
@@ -12,6 +13,7 @@ import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.ExpenseSplitEntity
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.local.entities.GroupMemberEntity
+import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 import com.example.flexfi.data.local.entities.StreakEntity
 import com.example.flexfi.data.local.entities.UserEntity
 
@@ -24,9 +26,10 @@ import com.example.flexfi.data.local.entities.UserEntity
         ExpenseEntity::class,
         ExpenseSplitEntity::class,
         CategoryEntity::class,
-        StreakEntity::class
+        StreakEntity::class,
+        PersonalExpenseEntity::class
     ],
-    version = 6, // Bumped to 6 for ExpenseEntity schema changes
+    version = 7, // Bumped to 7 for PersonalExpenseEntity (Phase 6)
     exportSchema = false
 )
 abstract class FlexFiDatabase : RoomDatabase() {
@@ -35,4 +38,5 @@ abstract class FlexFiDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
     abstract fun groupDao(): GroupDao
     abstract fun expenseDao(): ExpenseDao
+    abstract fun personalExpenseDao(): PersonalExpenseDao
 }
