@@ -35,6 +35,13 @@ interface GroupDao {
     fun getGroupsForUserPhone(userPhone: String): Flow<List<GroupEntity>>
 
     @Query("""
+        SELECT groups.* FROM groups 
+        INNER JOIN group_members ON groups.id = group_members.groupId 
+        WHERE group_members.phone = :userPhone
+    """)
+    suspend fun getGroupsForUserPhoneOnce(userPhone: String): List<GroupEntity>
+
+    @Query("""
         SELECT 
             gm.phone as phone,
             gm.joinedAt as joinedAt,

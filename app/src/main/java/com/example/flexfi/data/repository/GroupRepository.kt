@@ -84,6 +84,9 @@ class GroupRepository(
     fun getGroupsForUser(userPhone: String): Flow<List<GroupEntity>> =
         groupDao.getGroupsForUserPhone(userPhone)
 
+    suspend fun getGroupsForUserOnce(userPhone: String): List<GroupEntity> =
+        groupDao.getGroupsForUserPhoneOnce(userPhone)
+
     fun getGroupMembers(groupId: String): Flow<List<GroupMemberInfo>> =
         groupDao.getGroupMembersInfo(groupId)
 

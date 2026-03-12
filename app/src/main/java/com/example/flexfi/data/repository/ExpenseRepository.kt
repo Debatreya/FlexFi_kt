@@ -2,9 +2,11 @@ package com.example.flexfi.data.repository
 
 import com.example.flexfi.data.local.dao.ExpenseDao
 import com.example.flexfi.data.local.dao.PersonalExpenseDao
+import com.example.flexfi.data.local.dao.SettlementDao
 import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.ExpenseSplitEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
+import com.example.flexfi.data.local.entities.SettlementRecordEntity
 import com.example.flexfi.data.remote.FirestoreExpenseService
 import com.example.flexfi.data.remote.firestoreModels.ExpenseDoc
 import com.example.flexfi.data.remote.firestoreModels.SplitDoc
@@ -23,20 +25,14 @@ data class Settlement(
 class ExpenseRepository(
     private val expenseDao: ExpenseDao,
     private val firestoreExpenseService: FirestoreExpenseService,
-    private val personalExpenseDao: PersonalExpenseDao
+    private val personalExpenseDao: PersonalExpenseDao,
+    private val settlementDao: SettlementDao? = null
 ) {
 
     // ──────────────────────────────────────────────
     //  CREATE
     // ──────────────────────────────────────────────
 
-    /**
-     * Creates an expense with splits and pushes to Firestore.
-     *
-     * @param splitType "equal" or "exact"
-     * @param selectedMemberPhones phones of members participating in this expense
-     * @param exactAmounts required when splitType == "exact"; map of phone→amount
-     */
     suspend fun addExpense(
         title: String,
         amount: Double,
@@ -67,7 +63,7 @@ class ExpenseRepository(
                 val sum = amounts.values.sum()
                 if (kotlin.math.abs(sum - amount) > 0.01) {
                     throw IllegalArgumentException(
-                        "Exact split amounts (₹${"%.2f".format(sum)}) don't match total (₹${"%.2f".format(amount)})"
+                        "Exact split amounts (${sum}) don't match total (${amount})"
                     )
                 }
                 selectedMemberPhones.map { phone ->
@@ -96,7 +92,6 @@ class ExpenseRepository(
                     totalSplitSoFar += share
                 }
 
-                // Last member gets the remainder to ensure sum equals exactly the total amount
                 val lastMemberPhone = selectedMemberPhones.last()
                 val lastShare = kotlin.math.round((amount - totalSplitSoFar) * 100) / 100.0
                 mutableSplits.add(
@@ -111,14 +106,10 @@ class ExpenseRepository(
             }
         }
 
-        // Save to Room
         expenseDao.insertExpense(expense)
         expenseDao.insertSplits(splits)
-
-        // Generate personal expense records for every participant (offline-first, Room-only)
         createPersonalExpenses(expense, splits)
 
-        // Push to Firestore
         val expenseDoc = ExpenseDoc(
             id = expenseId,
             groupId = groupId,
@@ -149,12 +140,10 @@ class ExpenseRepository(
     suspend fun syncExpensesForGroup(groupId: String) {
         val remoteDocs = firestoreExpenseService.getExpensesForGroup(groupId)
 
-        // Clear local cache for this group (both group expenses and their personal mirrors)
         expenseDao.deleteSplitsForGroup(groupId)
         expenseDao.deleteExpensesForGroup(groupId)
         personalExpenseDao.deleteBySourceGroupId(groupId)
 
-        // Re-populate from Firestore
         remoteDocs.forEach { doc ->
             val entity = ExpenseEntity(
                 id = doc.id,
@@ -176,23 +165,17 @@ class ExpenseRepository(
                 )
             }
             expenseDao.insertSplits(splits)
-
-            // Rebuild personal expense mirrors from synced data
             createPersonalExpenses(entity, splits)
         }
     }
 
     // ──────────────────────────────────────────────
-    //  DEBT CALCULATION ENGINE
+    //  DEBT CALCULATION ENGINE (with settlements)
     // ──────────────────────────────────────────────
 
     /**
-     * Calculates net balance for every member in the group.
-     * Positive = is owed money (creditor), Negative = owes money (debtor).
-     *
-     * For each expense:
-     *   balances[paidBy] += amount
-     *   for each split: balances[member] -= share
+     * Calculates net balance for every member in the group,
+     * factoring in any recorded settlements.
      */
     suspend fun calculateGroupBalances(groupId: String): Map<String, Double> {
         val expenses = expenseDao.getExpensesForGroupOnce(groupId)
@@ -200,16 +183,25 @@ class ExpenseRepository(
 
         val balances = mutableMapOf<String, Double>()
 
-        // Credit the payer with the full amount
         for (expense in expenses) {
             balances[expense.paidByPhone] =
                 (balances[expense.paidByPhone] ?: 0.0) + expense.amount
         }
 
-        // Debit each participant with their share
         for (split in splits) {
             balances[split.memberPhone] =
                 (balances[split.memberPhone] ?: 0.0) - split.shareAmount
+        }
+
+        // Factor in settlements: fromPhone paid toPhone, so adjust accordingly
+        val settlements = settlementDao?.getSettlementsForGroupOnce(groupId) ?: emptyList()
+        for (record in settlements) {
+            // fromPhone made a payment → reduce their debt (increase balance)
+            balances[record.fromPhone] =
+                (balances[record.fromPhone] ?: 0.0) + record.amount
+            // toPhone received payment → reduce what's owed to them (decrease balance)
+            balances[record.toPhone] =
+                (balances[record.toPhone] ?: 0.0) - record.amount
         }
 
         return balances
@@ -217,20 +209,18 @@ class ExpenseRepository(
 
     /**
      * Converts a balance map into a minimal list of settlements.
-     * Uses a greedy approach: match the largest debtor with the largest creditor.
      */
     fun calculateSettlements(balances: Map<String, Double>): List<Settlement> {
-        val creditors = mutableListOf<Pair<String, Double>>() // phone, amount owed to them
-        val debtors = mutableListOf<Pair<String, Double>>()   // phone, amount they owe
+        val creditors = mutableListOf<Pair<String, Double>>()
+        val debtors = mutableListOf<Pair<String, Double>>()
 
         for ((phone, balance) in balances) {
             when {
                 balance > 0.01 -> creditors.add(phone to balance)
-                balance < -0.01 -> debtors.add(phone to -balance) // store as positive
+                balance < -0.01 -> debtors.add(phone to -balance)
             }
         }
 
-        // Sort descending by amount for greedy matching
         creditors.sortByDescending { it.second }
         debtors.sortByDescending { it.second }
 
@@ -254,22 +244,44 @@ class ExpenseRepository(
             debtAmounts[di] -= settle
 
             if (credAmounts[ci] < 0.01) ci++
-            if (debtAmounts[di] < 0.01) di++
+            if (di < debtAmounts.size && debtAmounts[di] < 0.01) di++
         }
 
         return settlements
     }
 
     // ──────────────────────────────────────────────
-    //  PERSONAL EXPENSE MIRROR
+    //  SETTLEMENT RECORDING
     // ──────────────────────────────────────────────
 
     /**
-     * Creates one [PersonalExpenseEntity] per split, recording each member's
-     * individual share as a personal expense record in the local DB.
-     *
-     * Called after splits are written in [addExpense] and [syncExpensesForGroup].
+     * Records an external payment. This adjusts group balances.
      */
+    suspend fun recordSettlement(
+        groupId: String?,
+        fromPhone: String,
+        toPhone: String,
+        amount: Double,
+        note: String = ""
+    ) {
+        val record = SettlementRecordEntity(
+            id = UUID.randomUUID().toString(),
+            groupId = groupId,
+            fromPhone = fromPhone,
+            toPhone = toPhone,
+            amount = amount,
+            note = note
+        )
+        settlementDao?.insert(record)
+    }
+
+    fun getSettlementsForGroup(groupId: String): Flow<List<SettlementRecordEntity>>? =
+        settlementDao?.getSettlementsForGroup(groupId)
+
+    // ──────────────────────────────────────────────
+    //  PERSONAL EXPENSE MIRROR
+    // ──────────────────────────────────────────────
+
     private suspend fun createPersonalExpenses(
         expense: ExpenseEntity,
         splits: List<ExpenseSplitEntity>
@@ -294,17 +306,9 @@ class ExpenseRepository(
     //  DELETE
     // ──────────────────────────────────────────────
 
-    /**
-     * Deletes a single expense and all its associated data:
-     * - expense_splits rows for this expense
-     * - the expense row itself
-     * - personal_expenses mirrors created from this expense
-     */
     suspend fun deleteExpense(expenseId: String) {
-        // Remove splits first (FK-safe ordering)
         expenseDao.deleteSplitsByExpenseId(expenseId)
         expenseDao.deleteExpenseById(expenseId)
-        // Remove the personal mirrors that were created from this expense
         personalExpenseDao.deleteBySourceExpenseId(expenseId)
     }
 }

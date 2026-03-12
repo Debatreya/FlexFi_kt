@@ -3,101 +3,177 @@ package com.example.flexfi.ui.screens.contacts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.flexfi.data.local.entities.ContactEntity
+import com.example.flexfi.ui.components.*
+import com.example.flexfi.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
-    viewModel: ContactViewModel,
-    onAddContactClick: () -> Unit
+    contacts: List<ContactEntity>,
+    onDeleteContact: (String) -> Unit,
+    onAddContactClick: () -> Unit,
+    onBackClick: () -> Unit,
+    onContactsTab: () -> Unit,
+    onGroupsTab: () -> Unit,
+    onHomeTab: () -> Unit,
+    onProfileTab: () -> Unit
 ) {
-    val contacts by viewModel.contacts.collectAsState()
-    var contactToDelete by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableStateOf(BottomNavTab.CONTACTS) }
 
-    // Refresh contacts (ghost → registered sync) every time this screen is entered
-    LaunchedEffect(Unit) {
-        viewModel.refreshContacts()
-    }
-
-    // Delete confirmation dialog
-    contactToDelete?.let { contactId ->
-        val contact = contacts.find { it.id == contactId }
-        AlertDialog(
-            onDismissRequest = { contactToDelete = null },
-            title = { Text("Delete Contact") },
-            text = { Text("Are you sure you want to delete ${contact?.name ?: "this contact"}?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteContact(contactId)
-                    contactToDelete = null
-                }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { contactToDelete = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
+    val filtered = if (searchQuery.isBlank()) contacts
+                   else contacts.filter {
+                       it.name.contains(searchQuery, ignoreCase = true) ||
+                       it.phone.contains(searchQuery)
+                   }
+    val flexFiContacts = filtered.filter { it.isGhost == false }
+    val ghostContacts = filtered.filter { it.isGhost == true }
 
     Scaffold(
+        containerColor = FlexFiGreySurface,
         topBar = {
-            TopAppBar(title = { Text("Contacts") })
+            FlexFiTopBar(
+                title = "Contacts",
+                showBackButton = true,
+                onBackClick = onBackClick,
+                actions = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.MoreVert, "More", tint = FlexFiDarkText)
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            FlexFiBottomNavBar(
+                currentTab = selectedTab,
+                onTabSelected = { tab ->
+                    selectedTab = tab
+                    when (tab) {
+                        BottomNavTab.HOME -> onHomeTab()
+                        BottomNavTab.GROUPS -> onGroupsTab()
+                        BottomNavTab.CONTACTS -> onContactsTab()
+                        BottomNavTab.PROFILE -> onProfileTab()
+                    }
+                }
+            )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddContactClick) {
-                Icon(Icons.Default.Add, contentDescription = "Add Contact")
-            }
+            FlexFiFab(onClick = onAddContactClick)
         }
     ) { padding ->
-        if (contacts.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No contacts yet")
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
+
+            // Search
+            item {
+                FlexFiSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "Search contacts..."
+                )
             }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                items(contacts) { contact ->
-                    ListItem(
-                        headlineContent = { Text(contact.name) },
-                        supportingContent = { Text(contact.phone) },
-                        leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
+
+            // ON FLEXFI section
+            if (flexFiContacts.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        Text(
+                            "ON FLEXFI",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = FlexFiBodyText,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = FlexFiGreenLight
+                        ) {
+                            Text(
+                                "${flexFiContacts.size}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FlexFiGreen,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                items(flexFiContacts) { contact ->
+                    FlexFiContactRow(
+                        name = contact.name,
+                        phone = contact.phone,
+                        showOnlineDot = true,
                         trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (contact.isGhost) {
-                                    Text("👻 Ghost", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                } else {
-                                    Icon(Icons.Default.CheckCircle, contentDescription = "FlexFi User", tint = Color.Green)
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(onClick = { contactToDelete = contact.id }) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "Delete Contact",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
+                            Icon(
+                                Icons.Default.Sync,
+                                contentDescription = "Synced",
+                                tint = FlexFiGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    )
+                }
+            }
+
+            // INVITE section
+            if (ghostContacts.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "INVITE TO FLEXFI",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FlexFiBodyText,
+                        letterSpacing = 1.sp
+                    )
+                }
+                items(ghostContacts) { contact ->
+                    FlexFiContactRow(
+                        name = contact.name,
+                        phone = contact.phone,
+                        isGhost = true,
+                        trailingContent = {
+                            FilledTonalButton(
+                                onClick = { /* invite */ },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = FlexFiLightBlue,
+                                    contentColor = FlexFiBlue
+                                )
+                            ) {
+                                Icon(
+                                    Icons.Default.PersonAdd,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Invite", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     )
-                    HorizontalDivider()
                 }
             }
         }

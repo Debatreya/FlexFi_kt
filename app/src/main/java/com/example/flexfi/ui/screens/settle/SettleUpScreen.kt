@@ -1,0 +1,288 @@
+package com.example.flexfi.ui.screens.settle
+
+import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.flexfi.ui.components.*
+import com.example.flexfi.ui.theme.*
+import com.example.flexfi.utils.CurrencyProvider
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettleUpScreen(
+    viewModel: SettleUpViewModel,
+    onBack: () -> Unit
+) {
+    val debts by viewModel.debts.collectAsState()
+    val totalYouOwe by viewModel.totalYouOwe.collectAsState()
+    val totalOwedToYou by viewModel.totalOwedToYou.collectAsState()
+    val context = LocalContext.current
+
+    var showPayDialog by remember { mutableStateOf(false) }
+    var selectedDebt by remember { mutableStateOf<SettleUpDebt?>(null) }
+    var payAmount by remember { mutableStateOf("") }
+
+    // Pay dialog
+    if (showPayDialog && selectedDebt != null) {
+        AlertDialog(
+            onDismissRequest = { showPayDialog = false },
+            title = { Text("Record Payment") },
+            text = {
+                Column {
+                    Text(
+                        "How much did you pay ${selectedDebt!!.personName}?",
+                        fontSize = 14.sp,
+                        color = FlexFiBodyText
+                    )
+                    Text(
+                        "Total owed: ${CurrencyProvider.formatAmount(selectedDebt!!.amount)}",
+                        fontSize = 12.sp,
+                        color = FlexFiLightText
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = payAmount,
+                        onValueChange = { payAmount = it },
+                        label = { Text("Amount Paid") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        prefix = { Text(CurrencyProvider.symbol) }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = { payAmount = "%.2f".format(selectedDebt!!.amount) },
+                            label = { Text("Full Amount") },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        AssistChip(
+                            onClick = { payAmount = "%.2f".format(selectedDebt!!.amount / 2) },
+                            label = { Text("Half") },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Note: Actual payment is done outside the app using your preferred payment method.",
+                        fontSize = 11.sp,
+                        color = FlexFiLightText
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val amount = payAmount.toDoubleOrNull()
+                    if (amount == null || amount <= 0) {
+                        Toast.makeText(context, "Enter valid amount", Toast.LENGTH_SHORT).show()
+                        return@TextButton
+                    }
+                    viewModel.recordPayment(
+                        toPhone = selectedDebt!!.personPhone,
+                        amount = amount,
+                        groupId = selectedDebt!!.groupId,
+                        onSuccess = {
+                            showPayDialog = false
+                            payAmount = ""
+                            Toast.makeText(context, "Payment recorded!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = {
+                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                        }
+                    )
+                }) {
+                    Text("Record", color = FlexFiBlue, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPayDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        containerColor = FlexFiGreySurface,
+        topBar = {
+            FlexFiTopBar(
+                title = "Settle Up",
+                showBackButton = true,
+                onBackClick = onBack
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item { Spacer(Modifier.height(4.dp)) }
+
+            // Summary card
+            item {
+                FlexFiGradientCard {
+                    Text("TOTAL TO SETTLE", fontSize = 11.sp, color = FlexFiWhite.copy(alpha = 0.7f), fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = CurrencyProvider.formatAmount(totalYouOwe),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FlexFiWhite
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = FlexFiWhite.copy(alpha = 0.2f)) {
+                            Text(
+                                "You owe: ${CurrencyProvider.formatAmount(totalYouOwe)}",
+                                fontSize = 11.sp,
+                                color = FlexFiWhite,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                        Surface(shape = RoundedCornerShape(8.dp), color = FlexFiWhite.copy(alpha = 0.2f)) {
+                            Text(
+                                "Owed to you: ${CurrencyProvider.formatAmount(totalOwedToYou)}",
+                                fontSize = 11.sp,
+                                color = FlexFiWhite,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Section header
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Friends & Groups", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                }
+            }
+
+            // Debts list
+            if (debts.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.CheckCircle, null, tint = FlexFiGreen, modifier = Modifier.size(48.dp))
+                            Spacer(Modifier.height(12.dp))
+                            Text("All settled up!", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = FlexFiDarkText)
+                            Text("You don't owe anyone", fontSize = 13.sp, color = FlexFiBodyText)
+                        }
+                    }
+                }
+            } else {
+                items(debts) { debt ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FlexFiAvatar(name = debt.personName, size = AvatarSize.MEDIUM)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(debt.personName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FlexFiDarkText)
+                                Text(
+                                    if (debt.youOwe) "You owe" else "Owes you",
+                                    fontSize = 12.sp,
+                                    color = FlexFiBodyText
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    CurrencyProvider.formatAmount(debt.amount),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (debt.youOwe) FlexFiRed else FlexFiGreen
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                if (debt.youOwe) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            selectedDebt = debt
+                                            payAmount = "%.2f".format(debt.amount)
+                                            showPayDialog = true
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = FlexFiGreenLight,
+                                            contentColor = FlexFiGreen
+                                        )
+                                    ) { Text("Pay", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                                } else {
+                                    FilledTonalButton(
+                                        onClick = { /* remind */ },
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = FlexFiLightBlue,
+                                            contentColor = FlexFiBlue
+                                        )
+                                    ) { Text("Remind", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Settle All button
+            if (debts.any { it.youOwe }) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    FlexFiPrimaryButton(
+                        text = "Settle All Debts",
+                        onClick = {
+                            // Record all debts
+                            debts.filter { it.youOwe }.forEach { debt ->
+                                viewModel.recordPayment(
+                                    toPhone = debt.personPhone,
+                                    amount = debt.amount,
+                                    groupId = debt.groupId,
+                                    onSuccess = {},
+                                    onError = {}
+                                )
+                            }
+                            Toast.makeText(context, "All debts settled!", Toast.LENGTH_LONG).show()
+                        },
+                        trailingIcon = {
+                            Icon(Icons.Default.ArrowForward, null, tint = FlexFiWhite, modifier = Modifier.size(18.dp))
+                        }
+                    )
+                }
+            }
+        }
+    }
+}

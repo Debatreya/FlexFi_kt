@@ -4,13 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -20,29 +15,23 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.room.Room
 import com.example.flexfi.data.local.FlexFiDatabase
-import com.example.flexfi.data.local.entities.UserEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.remote.FirestoreGroupService
 import com.example.flexfi.data.remote.FirestoreUserService
-import com.example.flexfi.data.repository.ContactRepository
-import com.example.flexfi.data.repository.GroupRepository
-import com.example.flexfi.data.repository.UserRepository
-import com.example.flexfi.data.repository.ExpenseRepository
-import com.example.flexfi.data.repository.PersonalExpenseRepository
-import com.example.flexfi.data.repository.StreakRepository
 import com.example.flexfi.data.remote.FirestoreExpenseService
-import com.example.flexfi.ui.screens.home.HomeScreen
-import com.example.flexfi.ui.screens.home.HomeViewModel
+import com.example.flexfi.data.repository.*
 import com.example.flexfi.ui.screens.auth.*
 import com.example.flexfi.ui.screens.contacts.*
-import com.example.flexfi.ui.screens.groups.*
 import com.example.flexfi.ui.screens.expenses.*
-import com.example.flexfi.ui.screens.personal.AddPersonalExpenseScreen
-import com.example.flexfi.ui.screens.personal.EditPersonalExpenseScreen
-import com.example.flexfi.ui.screens.personal.PersonalDashboardScreen
-import com.example.flexfi.ui.screens.personal.PersonalExpenseViewModel
+import com.example.flexfi.ui.screens.goals.*
+import com.example.flexfi.ui.screens.groups.*
+import com.example.flexfi.ui.screens.home.*
+import com.example.flexfi.ui.screens.personal.*
+import com.example.flexfi.ui.screens.settle.*
+import com.example.flexfi.ui.screens.splash.SplashScreen
+import com.example.flexfi.ui.theme.FlexFiTheme
+import com.example.flexfi.utils.CurrencyProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -50,6 +39,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize CurrencyProvider
+        CurrencyProvider.init(applicationContext)
 
         // Manual dependency injection
         val db = Room.databaseBuilder(
@@ -70,34 +62,37 @@ class MainActivity : ComponentActivity() {
         val expenseRepository = ExpenseRepository(
             db.expenseDao(),
             firestoreExpenseService,
-            db.personalExpenseDao()
+            db.personalExpenseDao(),
+            db.settlementDao()
         )
+        val budgetGoalRepository = BudgetGoalRepository(db.budgetGoalDao())
 
         setContent {
-            FlexFiApp(
-                authService, 
-                firestoreService, 
-                userRepository, 
-                contactRepository, 
-                groupRepository,
-                expenseRepository,
-                personalExpenseRepository,
-                streakRepository,
-                onLogoutRequested = {
-                    lifecycleScope.launch {
-                        withContext(Dispatchers.IO) {
-                            // Only clear user and group data on logout
-                            // Contacts are kept since only one person uses a device
-                            db.userDao().deleteAllUsers()
-                            db.groupDao().deleteAllGroups()
-                            db.groupDao().deleteAllGroupMembers()
-                            db.expenseDao().deleteAllExpenses()
-                            db.expenseDao().deleteAllSplits()
-                            db.personalExpenseDao().deleteAll()
+            FlexFiTheme {
+                FlexFiApp(
+                    authService = authService,
+                    firestoreService = firestoreService,
+                    userRepository = userRepository,
+                    contactRepository = contactRepository,
+                    groupRepository = groupRepository,
+                    expenseRepository = expenseRepository,
+                    personalExpenseRepository = personalExpenseRepository,
+                    streakRepository = streakRepository,
+                    budgetGoalRepository = budgetGoalRepository,
+                    onLogoutRequested = {
+                        lifecycleScope.launch {
+                            withContext(Dispatchers.IO) {
+                                db.userDao().deleteAllUsers()
+                                db.groupDao().deleteAllGroups()
+                                db.groupDao().deleteAllGroupMembers()
+                                db.expenseDao().deleteAllExpenses()
+                                db.expenseDao().deleteAllSplits()
+                                db.personalExpenseDao().deleteAll()
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }
@@ -112,10 +107,11 @@ fun FlexFiApp(
     expenseRepository: ExpenseRepository,
     personalExpenseRepository: PersonalExpenseRepository,
     streakRepository: StreakRepository,
+    budgetGoalRepository: BudgetGoalRepository,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
-    
+
     val homeViewModel: HomeViewModel = viewModel(
         factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository)
     )
@@ -123,7 +119,7 @@ fun FlexFiApp(
     val authViewModel: AuthViewModel = viewModel(
         factory = AuthViewModelFactory(authService, firestoreService, userRepository, groupRepository)
     )
-    
+
     val contactViewModel: ContactViewModel = viewModel(
         factory = ContactViewModelFactory(contactRepository, authService)
     )
@@ -140,150 +136,209 @@ fun FlexFiApp(
         factory = PersonalExpenseViewModelFactory(personalExpenseRepository, streakRepository, authService)
     )
 
-    val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
+    val settleUpViewModel: SettleUpViewModel = viewModel(
+        factory = SettleUpViewModelFactory(expenseRepository, groupRepository, contactRepository, authService)
+    )
 
-    MaterialTheme {
-        Surface {
-            NavHost(navController = navController, startDestination = startDestination) {
-                composable("login") {
-                    LoginScreen(
-                        viewModel = authViewModel,
-                        onCodeSent = { navController.navigate("otp") }
-                    )
-                }
-                composable("otp") {
-                    OtpScreen(
-                        viewModel = authViewModel,
-                        onVerified = { state ->
-                            if (state is AuthState.NewUser) {
-                                navController.navigate("profile_setup")
-                            } else {
-                                navController.navigate("home") {
-                                    popUpTo("login") { inclusive = true }
-                                }
-                            }
+    val budgetGoalViewModel: BudgetGoalViewModel = viewModel(
+        factory = BudgetGoalViewModelFactory(budgetGoalRepository, authService)
+    )
+
+    val startDestination = "splash"
+
+    Surface {
+        NavHost(navController = navController, startDestination = startDestination) {
+            composable("splash") {
+                SplashScreen(
+                    onNavigate = {
+                        val dest = if (authService.getCurrentUser() != null) "home" else "login"
+                        navController.navigate(dest) {
+                            popUpTo("splash") { inclusive = true }
                         }
-                    )
-                }
-                composable("profile_setup") {
-                    ProfileSetupScreen(
-                        viewModel = authViewModel,
-                        onComplete = {
+                    }
+                )
+            }
+            composable("login") {
+                LoginScreen(
+                    viewModel = authViewModel,
+                    onOtpSent = { navController.navigate("otp") }
+                )
+            }
+            composable("otp") {
+                OtpScreen(
+                    viewModel = authViewModel,
+                    onVerified = { state ->
+                        if (state is AuthState.NewUser) {
+                            navController.navigate("profile_setup")
+                        } else {
                             navController.navigate("home") {
                                 popUpTo("login") { inclusive = true }
                             }
                         }
-                    )
-                }
-                composable("home") {
-                    HomeScreen(
-                        viewModel = homeViewModel,
-                        onNavigateToGroups = { navController.navigate("groups") },
-                        onNavigateToContacts = { navController.navigate("contacts") },
-                        onNavigateToPersonal = { navController.navigate("personal_dashboard") },
-                        onCreateGroupClick = { navController.navigate("create_group") }
-                    )
-                }
-                composable("contacts") {
-                    ContactsScreen(
-                        viewModel = contactViewModel,
-                        onAddContactClick = { navController.navigate("add_contact") }
-                    )
-                }
-                composable("add_contact") {
-                    AddContactScreen(
-                        viewModel = contactViewModel,
-                        onContactAdded = { navController.popBackStack() }
-                    )
-                }
-                composable("groups") {
-                    GroupsScreen(
-                        viewModel = groupViewModel,
-                        onCreateGroupClick = { navController.navigate("create_group") },
-                        onGroupClick = { groupId -> navController.navigate("group_detail/$groupId") }
-                    )
-                }
-                composable("create_group") {
-                    CreateGroupScreen(
-                        groupViewModel = groupViewModel,
-                        contactViewModel = contactViewModel,
-                        onGroupCreated = { navController.popBackStack() }
-                    )
-                }
-                composable(
-                    route = "group_detail/{groupId}",
-                    arguments = listOf(navArgument("groupId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
-                    GroupDetailScreen(
-                        groupId = groupId,
-                        viewModel = groupViewModel,
-                        expenseViewModel = expenseViewModel,
-                        onEditClick = { id -> navController.navigate("edit_group/$id") },
-                        onDeleteSuccess = { navController.popBackStack() },
-                        onAddExpenseClick = { id -> navController.navigate("add_expense/$id") }
-                    )
-                }
-                composable(
-                    route = "edit_group/{groupId}",
-                    arguments = listOf(navArgument("groupId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
-                    EditGroupScreen(
-                        groupId = groupId,
-                        groupViewModel = groupViewModel,
-                        contactViewModel = contactViewModel,
-                        onGroupUpdated = { navController.popBackStack() }
-                    )
-                }
-                composable(
-                    route = "add_expense/{groupId}",
-                    arguments = listOf(navArgument("groupId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
-                    AddExpenseScreen(
-                        groupId = groupId,
-                        expenseViewModel = expenseViewModel,
-                        groupViewModel = groupViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-                composable("personal_dashboard") {
-                    PersonalDashboardScreen(
-                        viewModel = personalExpenseViewModel,
-                        onBack = { navController.popBackStack() },
-                        onAddExpenseClick = { navController.navigate("add_personal_expense") },
-                        onExpenseClick = { expense ->
-                            navController.navigate("edit_personal_expense/${expense.id}")
+                    }
+                )
+            }
+            composable("profile_setup") {
+                ProfileSetupScreen(
+                    viewModel = authViewModel,
+                    onComplete = {
+                        navController.navigate("home") {
+                            popUpTo("login") { inclusive = true }
                         }
-                    )
-                }
-                composable("add_personal_expense") {
-                    AddPersonalExpenseScreen(
-                        viewModel = personalExpenseViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-                composable(
-                    route = "edit_personal_expense/{expenseId}",
-                    arguments = listOf(navArgument("expenseId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val expenseId = backStackEntry.arguments?.getString("expenseId") ?: return@composable
-                    val expense = personalExpenseViewModel.findExpenseById(expenseId) ?: return@composable
-                    EditPersonalExpenseScreen(
-                        expense = expense,
-                        viewModel = personalExpenseViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
+                    }
+                )
+            }
+            composable("home") {
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onGroupClick = { groupId -> navController.navigate("group_detail/$groupId") },
+                    onContactsClick = { navController.navigate("contacts") },
+                    onGroupsClick = { navController.navigate("groups") },
+                    onPersonalClick = { navController.navigate("personal_dashboard") },
+                    onSettleUpClick = { navController.navigate("settle_up") },
+                    onBudgetGoalsClick = { navController.navigate("budget_goals") },
+                    onAddExpenseClick = { navController.navigate("groups") }
+                )
+            }
+            composable("contacts") {
+                val contacts by contactViewModel.contacts.collectAsState()
+                ContactsScreen(
+                    contacts = contacts,
+                    onDeleteContact = { contactViewModel.deleteContact(it) },
+                    onAddContactClick = { navController.navigate("add_contact") },
+                    onBackClick = { navController.popBackStack() },
+                    onContactsTab = {},
+                    onGroupsTab = { navController.navigate("groups") },
+                    onHomeTab = { navController.navigate("home") { popUpTo("home") { inclusive = true } } },
+                    onProfileTab = { navController.navigate("personal_dashboard") }
+                )
+            }
+            composable("add_contact") {
+                AddContactScreen(
+                    viewModel = contactViewModel,
+                    onContactAdded = { navController.popBackStack() }
+                )
+            }
+            composable("groups") {
+                GroupsScreen(
+                    viewModel = groupViewModel,
+                    onCreateGroupClick = { navController.navigate("create_group") },
+                    onGroupClick = { groupId -> navController.navigate("group_detail/$groupId") },
+                    onHomeTab = { navController.navigate("home") { popUpTo("home") { inclusive = true } } },
+                    onContactsTab = { navController.navigate("contacts") },
+                    onProfileTab = { navController.navigate("personal_dashboard") }
+                )
+            }
+            composable("create_group") {
+                CreateGroupScreen(
+                    groupViewModel = groupViewModel,
+                    contactViewModel = contactViewModel,
+                    onGroupCreated = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "group_detail/{groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
+                GroupDetailScreen(
+                    groupId = groupId,
+                    viewModel = groupViewModel,
+                    expenseViewModel = expenseViewModel,
+                    onEditClick = { id -> navController.navigate("edit_group/$id") },
+                    onDeleteSuccess = { navController.popBackStack() },
+                    onAddExpenseClick = { id -> navController.navigate("add_expense/$id") }
+                )
+            }
+            composable(
+                route = "edit_group/{groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
+                EditGroupScreen(
+                    groupId = groupId,
+                    groupViewModel = groupViewModel,
+                    contactViewModel = contactViewModel,
+                    onGroupUpdated = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "add_expense/{groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId") ?: return@composable
+                AddExpenseScreen(
+                    groupId = groupId,
+                    expenseViewModel = expenseViewModel,
+                    groupViewModel = groupViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("personal_dashboard") {
+                PersonalDashboardScreen(
+                    viewModel = personalExpenseViewModel,
+                    onBack = { navController.popBackStack() },
+                    onAddExpenseClick = { navController.navigate("add_personal_expense") },
+                    onExpenseClick = { expense ->
+                        navController.navigate("edit_personal_expense/${expense.id}")
+                    }
+                )
+            }
+            composable("add_personal_expense") {
+                AddPersonalExpenseScreen(
+                    viewModel = personalExpenseViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "edit_personal_expense/{expenseId}",
+                arguments = listOf(navArgument("expenseId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val expenseId = backStackEntry.arguments?.getString("expenseId") ?: return@composable
+                val expense = personalExpenseViewModel.findExpenseById(expenseId) ?: return@composable
+                EditPersonalExpenseScreen(
+                    expense = expense,
+                    viewModel = personalExpenseViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            // ── New Routes: Settle Up & Budget Goals ──
+            composable("settle_up") {
+                SettleUpScreen(
+                    viewModel = settleUpViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("budget_goals") {
+                BudgetGoalsScreen(
+                    viewModel = budgetGoalViewModel,
+                    onAddGoalClick = { navController.navigate("add_goal") },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("add_goal") {
+                AddEditGoalScreen(
+                    viewModel = budgetGoalViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = "edit_goal/{goalId}",
+                arguments = listOf(navArgument("goalId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val goalId = backStackEntry.arguments?.getString("goalId") ?: return@composable
+                AddEditGoalScreen(
+                    viewModel = budgetGoalViewModel,
+                    goalId = goalId,
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }
 }
 
+// ── ViewModelFactories ──
 
-
-// Factories for ViewModels
 class HomeViewModelFactory(
     private val authService: FirebaseAuthService,
     private val userRepository: UserRepository,
@@ -351,5 +406,27 @@ class PersonalExpenseViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
         return PersonalExpenseViewModel(personalExpenseRepository, streakRepository, authService) as T
+    }
+}
+
+class SettleUpViewModelFactory(
+    private val expenseRepository: ExpenseRepository,
+    private val groupRepository: GroupRepository,
+    private val contactRepository: ContactRepository,
+    private val authService: FirebaseAuthService
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return SettleUpViewModel(expenseRepository, groupRepository, contactRepository, authService) as T
+    }
+}
+
+class BudgetGoalViewModelFactory(
+    private val budgetGoalRepository: BudgetGoalRepository,
+    private val authService: FirebaseAuthService
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return BudgetGoalViewModel(budgetGoalRepository, authService) as T
     }
 }

@@ -4,16 +4,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
+import com.example.flexfi.ui.components.*
+import com.example.flexfi.ui.theme.*
+import com.example.flexfi.utils.CurrencyProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,8 +30,7 @@ fun PersonalDashboardScreen(
     val expenses by viewModel.expenses.collectAsState()
     val totalSpent by viewModel.totalSpent.collectAsState()
 
-    // Category totals derived from expense list
-    val categoryTotals: Map<String, Double> = remember(expenses) {
+    val categoryTotals = remember(expenses) {
         expenses
             .groupBy { it.category }
             .mapValues { (_, items) -> items.sumOf { it.amount } }
@@ -36,21 +39,24 @@ fun PersonalDashboardScreen(
             .associate { it.key to it.value }
     }
 
+    val maxCategory = categoryTotals.values.maxOrNull() ?: 1.0
+
     Scaffold(
+        containerColor = FlexFiGreySurface,
         topBar = {
-            TopAppBar(
-                title = { Text("👤 Your Spending") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+            FlexFiTopBar(
+                title = "Your Spending",
+                showBackButton = true,
+                onBackClick = onBack,
+                actions = {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Default.Notifications, "Notifications", tint = FlexFiDarkText)
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddExpenseClick) {
-                Icon(Icons.Default.Add, contentDescription = "Add Expense")
-            }
+            FlexFiFab(onClick = onAddExpenseClick)
         }
     ) { padding ->
         LazyColumn(
@@ -58,94 +64,128 @@ fun PersonalDashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item { Spacer(Modifier.height(4.dp)) }
 
-            // ─── Total Spent Card ──────────────────────────────
+            // Total Spent card
             item {
-                Spacer(Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                FlexFiGradientCard {
+                    Text("MONTHLY SPENDING", fontSize = 11.sp, color = FlexFiWhite.copy(alpha = 0.7f), fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Total Spent",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "₹${"%.2f".format(totalSpent)}",
-                            style = MaterialTheme.typography.headlineLarge,
+                            text = CurrencyProvider.formatAmount(totalSpent),
+                            fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = FlexFiWhite
                         )
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = FlexFiWhite.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                "This Month",
+                                fontSize = 11.sp,
+                                color = FlexFiWhite,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // ─── Category Breakdown ────────────────────────────
+            // Category Breakdown
             if (categoryTotals.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "Category Breakdown",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Text("Category Breakdown", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
                 }
                 item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = FlexFiWhite)
+                    ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            categoryTotals.entries.forEachIndexed { index, (category, amount) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = category,
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = "₹${"%.2f".format(amount)}",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                            categoryTotals.entries.forEach { (cat, amount) ->
+                                val icon = when (cat.lowercase()) {
+                                    "food" -> Icons.Default.Restaurant
+                                    "transport" -> Icons.Default.DirectionsCar
+                                    "shopping" -> Icons.Default.ShoppingBag
+                                    "entertainment" -> Icons.Default.SportsEsports
+                                    "health" -> Icons.Default.LocalHospital
+                                    "utilities" -> Icons.Default.Bolt
+                                    "rent" -> Icons.Default.Home
+                                    else -> Icons.Default.MoreHoriz
                                 }
-                                if (index < categoryTotals.size - 1) {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                                val color = when (cat.lowercase()) {
+                                    "food" -> CategoryFood
+                                    "transport" -> CategoryTransport
+                                    "shopping" -> CategoryShopping
+                                    "entertainment" -> CategoryEntertainment
+                                    "health" -> CategoryHealth
+                                    "utilities" -> CategoryUtilities
+                                    "rent" -> CategoryRent
+                                    else -> CategoryOther
                                 }
+                                FlexFiCategoryProgressBar(
+                                    icon = icon,
+                                    iconTint = color,
+                                    label = cat,
+                                    amount = CurrencyProvider.formatAmount(amount),
+                                    progress = (amount / maxCategory).toFloat(),
+                                    progressColor = color
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // ─── Recent Expenses ────────────────────────────────
+            // Recent Activity
             if (expenses.isNotEmpty()) {
                 item {
-                    Text(
-                        text = "Recent Expenses",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Recent Activity", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                        Row {
+                            IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.FilterList, null, tint = FlexFiBodyText, modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Search, null, tint = FlexFiBodyText, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
                 }
                 items(expenses) { expense ->
-                    PersonalExpenseItem(
-                        expense = expense,
+                    val icon = when (expense.category.lowercase()) {
+                        "food" -> Icons.Default.Restaurant
+                        "transport" -> Icons.Default.DirectionsCar
+                        "shopping" -> Icons.Default.ShoppingBag
+                        else -> Icons.Default.Receipt
+                    }
+                    val iconColor = when (expense.category.lowercase()) {
+                        "food" -> CategoryFood
+                        "transport" -> CategoryTransport
+                        "shopping" -> CategoryShopping
+                        else -> CategoryOther
+                    }
+                    FlexFiExpenseCard(
+                        title = expense.description ?: "Expense",
+                        subtitle = "${expense.category} • ${if (expense.source == "GROUP") "Group" else "Personal"}",
+                        amount = CurrencyProvider.formatAmount(expense.amount),
+                        icon = icon,
+                        iconBgColor = iconColor.copy(alpha = 0.15f),
+                        iconTint = iconColor,
                         onClick = { onExpenseClick(expense) }
                     )
                 }
-                // Bottom padding so FAB doesn't overlap last item
                 item { Spacer(Modifier.height(80.dp)) }
             } else {
                 item {
@@ -155,78 +195,10 @@ fun PersonalDashboardScreen(
                             .padding(vertical = 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "No expenses yet.\nTap + to add your first expense!",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text("No expenses yet.\nTap + to add your first expense!", fontSize = 14.sp, color = FlexFiBodyText)
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PersonalExpenseItem(
-    expense: PersonalExpenseEntity,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = expense.description ?: "Expense",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = expense.category,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    // Source badge
-                    val badgeLabel = if (expense.source == "GROUP") "Group" else "Personal"
-                    val badgeColor = if (expense.source == "GROUP")
-                        MaterialTheme.colorScheme.tertiary
-                    else
-                        MaterialTheme.colorScheme.secondary
-                    Surface(
-                        shape = MaterialTheme.shapes.extraSmall,
-                        color = badgeColor.copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = badgeLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = badgeColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-            Text(
-                text = "₹${"%.2f".format(expense.amount)}",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }

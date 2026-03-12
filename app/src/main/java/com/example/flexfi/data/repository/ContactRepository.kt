@@ -78,6 +78,8 @@ class ContactRepository(
         }
     }
 
+    suspend fun getAllContactsOnce(): List<ContactEntity> = contactDao.getAllContactsSync()
+
     suspend fun deleteContact(contactId: String) {
         contactDao.deleteContact(contactId)
     }
