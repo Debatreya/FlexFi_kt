@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.flexfi.utils.ExpenseCategorizer
 
 private val CATEGORIES = listOf(
     "Food", "Transport", "Shopping", "Entertainment", "Utilities", "Health", "Other"
@@ -82,7 +83,12 @@ fun AddPersonalExpenseScreen(
             // Title
             OutlinedTextField(
                 value = title,
-                onValueChange = { title = it },
+                onValueChange = { 
+                    title = it
+                    ExpenseCategorizer.categorize(it)?.let { detectedCategory ->
+                        selectedCategory = detectedCategory
+                    }
+                },
                 label = { Text("Title") },
                 placeholder = { Text("e.g. Vegetables, Uber Ride") },
                 modifier = Modifier.fillMaxWidth(),

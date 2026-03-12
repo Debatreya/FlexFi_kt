@@ -6,6 +6,8 @@ import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.Settlement
+import com.example.flexfi.data.repository.StreakRepository
+import com.example.flexfi.data.remote.FirebaseAuthService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +16,9 @@ import kotlinx.coroutines.launch
 
 class ExpenseViewModel(
     private val expenseRepository: ExpenseRepository,
-    private val groupRepository: GroupRepository
+    private val groupRepository: GroupRepository,
+    private val streakRepository: StreakRepository,
+    private val authService: FirebaseAuthService
 ) : ViewModel() {
 
     private val _expenses = MutableStateFlow<List<ExpenseEntity>>(emptyList())
@@ -75,6 +79,10 @@ class ExpenseViewModel(
                     selectedMemberPhones = selectedMemberPhones,
                     exactAmounts = exactAmounts
                 )
+                val userPhone = authService.getCurrentUser()?.phoneNumber
+                if (!userPhone.isNullOrBlank()) {
+                    streakRepository.updateStreak(userPhone)
+                }
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "An error occurred")

@@ -1,4 +1,4 @@
-# 🚀 FlexFi Development Progress (Phase 5 Complete)
+# 🚀 FlexFi Development Progress (Phase 7 Complete)
 
 **Project:** FlexFi – Social Expense Tracking Platform
 **Vision:** *The “Strava for Personal Finance”*
@@ -7,7 +7,7 @@ FlexFi combines **expense tracking, group splitting, and social financial insigh
 
 ---
 
-# 📑 Phase Summaries (0 — 4)
+# 📑 Phase Summaries (0 — 6) Brief
 
 ### Phase 0 — Architecture Setup
 Established the foundation with **Kotlin, Jetpack Compose, Room, and Firebase**. Implemented the Repository pattern and base navigation.
@@ -24,139 +24,152 @@ Solved friction by allowing users to split expenses with **"Ghost Contacts"** (n
 ### Phase 4 — Group System
 Built **collaborative group management**. Implemented Firestore-backed groups, admin controls (edit/delete), member name resolution via contacts, and multi-device sync.
 
+### Phase 5 — Expense Splitting Engine (CORE)
+Implemented the math and UI for adding expenses and calculating actionable debts. Refactored the core data layers, established rounding precisions, and a greedy net-settlement matching algorithm ("who owes whom"). Built the full Group Balance Dashboard UI.
+
+### Phase 6 — Personal Expense Tracking
+Added **Manual Private Expenses** ensuring offline-first CRUD. Users can now categorize personal items, view isolated charts/stats, and mirror their split group-shares to provide a unified `Total Spent` value reflecting true aggregate outflow.
+
 ---
 
-# Phase 5 — Expense Splitting Engine (CORE) ⚡
+# 🌟 Phase 7 — Smart Categorization + Gamification (Current)
 
-Goal: Implement the math and UI for adding expenses and calculating actionable debts.
+**Goal:** Transform the raw tool into a frictionless and engaging "smart habit" app.
 
-### 1. Data Layer Refactoring
-Refactored the schema to align with MVP requirements:
-- **`ExpenseEntity`**: Now tracks `paidByPhone`, `groupId`, and `createdAt` with precision.
-- **`ExpenseSplitEntity`**: Tracks individual member shares (`shareAmount`) linked by phone.
-- **Firestore `ExpenseDoc`**: Uses a unified document structure with embedded splits for optimized cloud performance.
+### 1. Smart Expense Categorization
+- Built `ExpenseCategorizer.kt`, a responsive utility capable of sniffing expense keywords in real-time.
+- Whenever a user enters known terms (e.g., "Uber", "Zomato", "Flight", "Netflix"), the system immediately auto-matches it to categories like `Transport`, `Food`, `Travel`, or `Subscriptions`.
+- Integrated seamlessly into both `AddExpenseScreen` and `AddPersonalExpenseScreen`'s title fields.
 
-### 2. The Debt Engine (Business Logic)
-Implemented the core financial algorithms in `ExpenseRepository`:
-- **Split Logic**:
-    - **Equal Split**: Automatically divides the total among participants.
-    - **Rounding Precision**: Implemented a "remainder to last member" logic (e.g., ₹100 / 3 = 33.33, 33.33, 33.34) to prevent balance drift.
-    - **Exact split**: Allows manual entry with mathematical validation (sum of splits must equal total).
-- **Settlement Algorithm**: A greedy matching engine that converts net balances into minimal transactions (e.g., "Rahul owes You ₹300").
+### 2. Strava-style Streak Tracking
+- Implemented `StreakEntity`, `StreakDao`, and `StreakRepository` to persist user-logging velocity locally.
+- Designed dynamic time-bounds: logging consecutively daily loops a streak, missing a day rests it, logging multiple times daily holds ground.
+- Intercepted expense saves in `PersonalExpenseViewModel` and `ExpenseViewModel` to update the Streak metric efficiently on completion.
 
-### 3. Expense Management UI
-- **`AddExpenseScreen`**: A full-featured form with a payer dropdown, split-type toggle, and multi-member selector.
-- **`ExpenseListItem`**: Visual timeline of group costs showing title, date, payer, and amount.
-- **Real-time Sync**: Expenses added while offline are queued and synced to Firestore; remote expenses are pulled and cached automatically.
-
-### 4. Group Balance Dashboard
-Modified `GroupDetailScreen` to serve as a financial command center:
-- **Balance Summary**: Real-time view of who "gets back" vs "owes" money, color-coded for clarity.
-- **Actionable Settlements**: Lists exactly who needs to pay whom to clear all debts.
-- **Expense History**: A searchable list of all transactional activity within the group.
+### 3. Dynamic Gamified Dashboard UI
+- Pulled the `HomeScreen` into its own designated package with an exclusive `HomeViewModel` aggregator.
+- Orchestrated the grand dashboard elements:
+  - **Main Balance Gradient Card**: Displays large sweeping figures evaluating the aggregate network values (Net Balance, You Owe, Owed to You).
+  - **Habit Banner**: Displays context-aware 🔥 gamified milestones (e.g., Bronze Tracker, Finance Athlete) depending on current streak velocity.
+  - **Active Groups Horizontal Carousel**: Direct launchpads summarizing current active projects.
+  - **Dual-Sourced Recent Feed**: Mixed pipeline timeline uniting personal entries alongside group shares cleanly on a unified vertical board.
 
 ### Outcome
-FlexFi is now a **fully functional Splitwise competitor**. It handles the complexity of shared expenses, mathematical precision, and offline reliability.
+FlexFi isn’t just tracking balances—it helps shape habit cycles via immediate dopamine cues and minimal-friction categorized inputs.
 
 ---
 
-### Folder Structure (after Phase 5)
+### Folder Structure (after Phase 7)
 
 ```
-PS C:\Users\debat\OneDrive\Desktop\Devs\FlexFi\app\src\main\java\com\example\flexfi> tree /F
-Folder PATH listing for volume OS
-Volume serial number is 8C4D-41E5
-C:.
-│   MainActivity.kt
-│   
-├───data
-│   ├───local
-│   │   │   FlexFiDatabase.kt
-│   │   │
-│   │   ├───dao
-│   │   │       ContactDao.kt
-│   │   │       ExpenseDao.kt
-│   │   │       GroupDao.kt
-│   │   │       UserDao.kt
-│   │   │
-│   │   └───entities
-│   │           .gitkeep
-│   │           CategoryEntity.kt
-│   │           ContactEntity.kt
-│   │           ExpenseEntity.kt
-│   │           ExpenseSplitEntity.kt
-│   │           GroupEntity.kt
-│   │           GroupMemberEntity.kt
-│   │           StreakEntity.kt
-│   │           UserEntity.kt
-│   │
-│   ├───remote
-│   │   │   .gitkeep
-│   │   │   FirebaseAuthService.kt
-│   │   │   FirestoreExpenseService.kt
-│   │   │   FirestoreGroupService.kt
-│   │   │   FirestoreUserService.kt
-│   │   │
-│   │   └───firestoreModels
-│   │           .gitkeep
-│   │           ExpenseDoc.kt
-│   │           GroupDoc.kt
-│   │           UserDoc.kt
-│   │
-│   └───repository
-│           .gitkeep
-│           ContactRepository.kt
-│           ExpenseRepository.kt
-│           GroupRepository.kt
-│           UserRepository.kt
-│
-├───domain
-│   ├───models
-│   │       .gitkeep
-│   │       Contact.kt
-│   │       Expense.kt
-│   │       ExpenseSplit.kt
-│   │       Group.kt
-│   │       User.kt
-│   │
-│   └───usecases
-│           .gitkeep
-│
-├───ui
-│   ├───components
-│   │       .gitkeep
-│   │
-│   ├───screens
-│   │   │   .gitkeep
-│   │   │
-│   │   ├───auth
-│   │   │       AuthViewModel.kt
-│   │   │       LoginScreen.kt
-│   │   │       OtpScreen.kt
-│   │   │       ProfileSetupScreen.kt
-│   │   │
-│   │   ├───contacts
-│   │   │       AddContactScreen.kt
-│   │   │       ContactsScreen.kt
-│   │   │       ContactViewModel.kt
-│   │   │
-│   │   ├───expenses
-│   │   │       AddExpenseScreen.kt
-│   │   │       ExpenseListItem.kt
-│   │   │       ExpenseViewModel.kt
-│   │   │
-│   │   └───groups
-│   │           CreateGroupScreen.kt
-│   │           EditGroupScreen.kt
-│   │           GroupDetailScreen.kt
-│   │           GroupsScreen.kt
-│   │           GroupViewModel.kt
-│   │
-│   └───theme
-│           Color.kt
-│           Theme.kt
-│           Type.kt
-│
-└───utils
+C:\USERS\DEBAT\ONEDRIVE\DESKTOP\DEVS\FLEXFI\APP\SRC\MAIN\JAVA\COM\EXAMPLE\FLEXFI
+|   MainActivity.kt
+|   
++---data
+|   +---local
+|   |   |   FlexFiDatabase.kt
+|   |   |   
+|   |   +---dao
+|   |   |       ContactDao.kt
+|   |   |       ExpenseDao.kt
+|   |   |       GroupDao.kt
+|   |   |       PersonalExpenseDao.kt
+|   |   |       StreakDao.kt
+|   |   |       UserDao.kt
+|   |   |       
+|   |   \---entities
+|   |           .gitkeep
+|   |           CategoryEntity.kt
+|   |           ContactEntity.kt
+|   |           ExpenseEntity.kt
+|   |           ExpenseSplitEntity.kt
+|   |           GroupEntity.kt
+|   |           GroupMemberEntity.kt
+|   |           PersonalExpenseEntity.kt
+|   |           StreakEntity.kt
+|   |           UserEntity.kt
+|   |           
+|   +---remote
+|   |   |   .gitkeep
+|   |   |   FirebaseAuthService.kt
+|   |   |   FirestoreExpenseService.kt
+|   |   |   FirestoreGroupService.kt
+|   |   |   FirestoreUserService.kt
+|   |   |   
+|   |   \---firestoreModels
+|   |           .gitkeep
+|   |           ExpenseDoc.kt
+|   |           GroupDoc.kt
+|   |           UserDoc.kt
+|   |           
+|   \---repository
+|           .gitkeep
+|           ContactRepository.kt
+|           ExpenseRepository.kt
+|           GroupRepository.kt
+|           PersonalExpenseRepository.kt
+|           StreakRepository.kt
+|           UserRepository.kt
+|           
++---domain
+|   +---models
+|   |       .gitkeep
+|   |       Contact.kt
+|   |       Expense.kt
+|   |       ExpenseSplit.kt
+|   |       Group.kt
+|   |       PersonalExpense.kt
+|   |       User.kt
+|   |       
+|   \---usecases
+|           .gitkeep
+|           
++---ui
+|   +---components
+|   |       .gitkeep
+|   |       
+|   +---screens
+|   |   |   .gitkeep
+|   |   |   
+|   |   +---auth
+|   |   |       AuthViewModel.kt
+|   |   |       LoginScreen.kt
+|   |   |       OtpScreen.kt
+|   |   |       ProfileSetupScreen.kt
+|   |   |       
+|   |   +---contacts
+|   |   |       AddContactScreen.kt
+|   |   |       ContactsScreen.kt
+|   |   |       ContactViewModel.kt
+|   |   |       
+|   |   +---expenses
+|   |   |       AddExpenseScreen.kt
+|   |   |       ExpenseListItem.kt
+|   |   |       ExpenseViewModel.kt
+|   |   |       
+|   |   +---groups
+|   |   |       CreateGroupScreen.kt
+|   |   |       EditGroupScreen.kt
+|   |   |       GroupDetailScreen.kt
+|   |   |       GroupsScreen.kt
+|   |   |       GroupViewModel.kt
+|   |   |       
+|   |   +---home
+|   |   |       HomeScreen.kt
+|   |   |       HomeViewModel.kt
+|   |   |       
+|   |   \---personal
+|   |           AddPersonalExpenseScreen.kt
+|   |           EditPersonalExpenseScreen.kt
+|   |           PersonalDashboardScreen.kt
+|   |           PersonalExpenseViewModel.kt
+|   |           
+|   \---theme
+|           Color.kt
+|           Theme.kt
+|           Type.kt
+|           
+\---utils
         .gitkeep
+        ExpenseCategorizer.kt
 ```

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.repository.PersonalExpenseRepository
+import com.example.flexfi.data.repository.StreakRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 
 class PersonalExpenseViewModel(
     private val personalExpenseRepository: PersonalExpenseRepository,
+    private val streakRepository: StreakRepository,
     private val authService: FirebaseAuthService
 ) : ViewModel() {
 
@@ -70,6 +72,7 @@ class PersonalExpenseViewModel(
                     category = category,
                     dateMillis = dateMillis
                 )
+                streakRepository.updateStreak(phone)
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "Failed to add expense")

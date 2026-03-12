@@ -29,7 +29,10 @@ import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.UserRepository
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.PersonalExpenseRepository
+import com.example.flexfi.data.repository.StreakRepository
 import com.example.flexfi.data.remote.FirestoreExpenseService
+import com.example.flexfi.ui.screens.home.HomeScreen
+import com.example.flexfi.ui.screens.home.HomeViewModel
 import com.example.flexfi.ui.screens.auth.*
 import com.example.flexfi.ui.screens.contacts.*
 import com.example.flexfi.ui.screens.groups.*
@@ -63,6 +66,7 @@ class MainActivity : ComponentActivity() {
         val contactRepository = ContactRepository(db.contactDao(), firestoreService)
         val groupRepository = GroupRepository(db.groupDao(), db.contactDao(), firestoreGroupService)
         val personalExpenseRepository = PersonalExpenseRepository(db.personalExpenseDao())
+        val streakRepository = StreakRepository(db.streakDao())
         val expenseRepository = ExpenseRepository(
             db.expenseDao(),
             firestoreExpenseService,
@@ -78,6 +82,7 @@ class MainActivity : ComponentActivity() {
                 groupRepository,
                 expenseRepository,
                 personalExpenseRepository,
+                streakRepository,
                 onLogoutRequested = {
                     lifecycleScope.launch {
                         withContext(Dispatchers.IO) {
@@ -106,10 +111,15 @@ fun FlexFiApp(
     groupRepository: GroupRepository,
     expenseRepository: ExpenseRepository,
     personalExpenseRepository: PersonalExpenseRepository,
+    streakRepository: StreakRepository,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
     
+    val homeViewModel: HomeViewModel = viewModel(
+        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository)
+    )
+
     val authViewModel: AuthViewModel = viewModel(
         factory = AuthViewModelFactory(authService, firestoreService, userRepository, groupRepository)
     )
@@ -123,11 +133,11 @@ fun FlexFiApp(
     )
 
     val expenseViewModel: ExpenseViewModel = viewModel(
-        factory = ExpenseViewModelFactory(expenseRepository, groupRepository)
+        factory = ExpenseViewModelFactory(expenseRepository, groupRepository, streakRepository, authService)
     )
 
     val personalExpenseViewModel: PersonalExpenseViewModel = viewModel(
-        factory = PersonalExpenseViewModelFactory(personalExpenseRepository, authService)
+        factory = PersonalExpenseViewModelFactory(personalExpenseRepository, streakRepository, authService)
     )
 
     val startDestination = if (authService.getCurrentUser() != null) "home" else "login"
@@ -167,17 +177,11 @@ fun FlexFiApp(
                 }
                 composable("home") {
                     HomeScreen(
-                        authService = authService,
-                        onLogout = {
-                            onLogoutRequested()
-                            navController.navigate("login") {
-                                popUpTo("home") { inclusive = true }
-                            }
-                        },
-                        onNavigateToContacts = { navController.navigate("contacts") },
+                        viewModel = homeViewModel,
                         onNavigateToGroups = { navController.navigate("groups") },
+                        onNavigateToContacts = { navController.navigate("contacts") },
                         onNavigateToPersonal = { navController.navigate("personal_dashboard") },
-                        userRepository = userRepository
+                        onCreateGroupClick = { navController.navigate("create_group") }
                     )
                 }
                 composable("contacts") {
@@ -277,70 +281,23 @@ fun FlexFiApp(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HomeScreen(
-    authService: FirebaseAuthService, 
-    onLogout: () -> Unit,
-    onNavigateToContacts: () -> Unit,
-    onNavigateToGroups: () -> Unit,
-    onNavigateToPersonal: () -> Unit,
-    userRepository: UserRepository
-) {
-    val currentUser by userRepository.getCurrentUserFlow().collectAsState(initial = null)
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Welcome, ${currentUser?.name ?: "FlexFi User"} 🚀") }) }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Button(
-                onClick = onNavigateToGroups,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Groups, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("My Groups")
-            }
 
-            Button(
-                onClick = onNavigateToContacts,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Person, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Manage Contacts")
-            }
-
-            Button(
-                onClick = onNavigateToPersonal,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Person, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("My Spending")
-            }
-
-            Button(
-                onClick = {
-                    authService.signOut()
-                    onLogout()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("Logout")
-            }
-        }
+// Factories for ViewModels
+class HomeViewModelFactory(
+    private val authService: FirebaseAuthService,
+    private val userRepository: UserRepository,
+    private val groupRepository: GroupRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val personalExpenseRepository: PersonalExpenseRepository,
+    private val streakRepository: StreakRepository
+) : androidx.lifecycle.ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+        return HomeViewModel(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository) as T
     }
 }
 
-// Factories for ViewModels
 class AuthViewModelFactory(
     private val authService: FirebaseAuthService,
     private val firestoreService: FirestoreUserService,
@@ -376,20 +333,23 @@ class GroupViewModelFactory(
 
 class ExpenseViewModelFactory(
     private val expenseRepository: ExpenseRepository,
-    private val groupRepository: GroupRepository
+    private val groupRepository: GroupRepository,
+    private val streakRepository: StreakRepository,
+    private val authService: FirebaseAuthService
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        return ExpenseViewModel(expenseRepository, groupRepository) as T
+        return ExpenseViewModel(expenseRepository, groupRepository, streakRepository, authService) as T
     }
 }
 
 class PersonalExpenseViewModelFactory(
     private val personalExpenseRepository: PersonalExpenseRepository,
+    private val streakRepository: StreakRepository,
     private val authService: FirebaseAuthService
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        return PersonalExpenseViewModel(personalExpenseRepository, authService) as T
+        return PersonalExpenseViewModel(personalExpenseRepository, streakRepository, authService) as T
     }
 }

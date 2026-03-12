@@ -16,6 +16,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.flexfi.data.local.dao.GroupMemberInfo
 import com.example.flexfi.ui.screens.groups.GroupViewModel
+import com.example.flexfi.utils.ExpenseCategorizer
+
+private val CATEGORIES = listOf(
+    "Food", "Transport", "Shopping", "Entertainment", "Utilities", "Health", "Other"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +36,8 @@ fun AddExpenseScreen(
 
     var title by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf(CATEGORIES.first()) }
+    var categoryExpanded by remember { mutableStateOf(false) }
     var paidByPhone by remember { mutableStateOf(currentUserPhone) }
     
     // Split Type: "equal" or "exact"
@@ -71,7 +77,12 @@ fun AddExpenseScreen(
         ) {
             OutlinedTextField(
                 value = title,
-                onValueChange = { title = it },
+                onValueChange = { 
+                    title = it
+                    ExpenseCategorizer.categorize(it)?.let { detectedCategory ->
+                        category = detectedCategory
+                    }
+                },
                 label = { Text("Title (e.g. Dinner)") },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -83,6 +94,37 @@ fun AddExpenseScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Category dropdown
+            ExposedDropdownMenuBox(
+                expanded = categoryExpanded,
+                onExpandedChange = { categoryExpanded = !categoryExpanded }
+            ) {
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = categoryExpanded,
+                    onDismissRequest = { categoryExpanded = false }
+                ) {
+                    CATEGORIES.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat) },
+                            onClick = {
+                                category = cat
+                                categoryExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             // Split Type Toggle
             Row(

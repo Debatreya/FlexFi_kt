@@ -6,6 +6,7 @@ import com.example.flexfi.data.local.dao.ContactDao
 import com.example.flexfi.data.local.dao.ExpenseDao
 import com.example.flexfi.data.local.dao.GroupDao
 import com.example.flexfi.data.local.dao.PersonalExpenseDao
+import com.example.flexfi.data.local.dao.StreakDao
 import com.example.flexfi.data.local.dao.UserDao
 import com.example.flexfi.data.local.entities.CategoryEntity
 import com.example.flexfi.data.local.entities.ContactEntity
@@ -39,4 +40,5 @@ abstract class FlexFiDatabase : RoomDatabase() {
     abstract fun groupDao(): GroupDao
     abstract fun expenseDao(): ExpenseDao
     abstract fun personalExpenseDao(): PersonalExpenseDao
+    abstract fun streakDao(): StreakDao
 }
