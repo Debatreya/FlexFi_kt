@@ -24,7 +24,7 @@ fun FlexFiContactRow(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = FlexFiGreySurface),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         onClick = onClick
     ) {
@@ -46,13 +46,13 @@ fun FlexFiContactRow(
                     text = name,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = FlexFiDarkText
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = phone,
                     fontSize = 12.sp,
-                    color = FlexFiBodyText
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             trailingContent()

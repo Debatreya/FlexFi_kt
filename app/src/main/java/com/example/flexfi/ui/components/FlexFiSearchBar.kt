@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.flexfi.ui.theme.FlexFiBodyText
-import com.example.flexfi.ui.theme.FlexFiGreySurface
 
 @Composable
 fun FlexFiSearchBar(
@@ -35,8 +34,8 @@ fun FlexFiSearchBar(
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = Color.Transparent,
             focusedBorderColor = Color.Transparent,
-            unfocusedContainerColor = FlexFiGreySurface,
-            focusedContainerColor = FlexFiGreySurface
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     )
 }

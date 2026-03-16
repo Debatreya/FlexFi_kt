@@ -26,8 +26,8 @@ interface PersonalExpenseDao {
     @Query("SELECT * FROM personal_expenses WHERE userPhone = :phone ORDER BY createdAt DESC")
     fun getExpenses(phone: String): Flow<List<PersonalExpenseEntity>>
 
-    /** Sum of all amounts for the given user */
-    @Query("SELECT SUM(amount) FROM personal_expenses WHERE userPhone = :phone")
+    /** Sum of all base amounts (USD) for the given user */
+    @Query("SELECT SUM(baseAmount) FROM personal_expenses WHERE userPhone = :phone")
     fun getTotalSpent(phone: String): Flow<Double?>
 
     /** Called when a group's expenses are re-synced — wipe stale personal records */
@@ -41,4 +41,28 @@ interface PersonalExpenseDao {
     /** Called on user logout */
     @Query("DELETE FROM personal_expenses")
     suspend fun deleteAll()
+
+    /** Filter expenses by type (INCOME, EXPENSE, TRANSFER) */
+    @Query("SELECT * FROM personal_expenses WHERE userPhone = :phone AND type = :type ORDER BY createdAt DESC")
+    fun getExpensesByType(phone: String, type: String): Flow<List<PersonalExpenseEntity>>
+
+    /** Filter expenses by payment mode */
+    @Query("SELECT * FROM personal_expenses WHERE userPhone = :phone AND paymentMode = :mode ORDER BY createdAt DESC")
+    fun getExpensesByPaymentMode(phone: String, mode: String): Flow<List<PersonalExpenseEntity>>
+
+    /** Search expenses by tag (comma-separated field) */
+    @Query("SELECT * FROM personal_expenses WHERE userPhone = :phone AND tags LIKE '%' || :tag || '%' ORDER BY createdAt DESC")
+    fun getExpensesByTag(phone: String, tag: String): Flow<List<PersonalExpenseEntity>>
+
+    /** Get expenses in a date range (for budget calculations) */
+    @Query("SELECT * FROM personal_expenses WHERE userPhone = :phone AND createdAt >= :startMillis AND createdAt <= :endMillis ORDER BY createdAt DESC")
+    fun getExpensesInRange(phone: String, startMillis: Long, endMillis: Long): Flow<List<PersonalExpenseEntity>>
+
+    /** Sum of base amounts for a specific category in a date range (for budget vs actual) */
+    @Query("SELECT SUM(baseAmount) FROM personal_expenses WHERE userPhone = :phone AND category = :category AND type = 'EXPENSE' AND createdAt >= :startMillis AND createdAt <= :endMillis")
+    fun getCategorySpentInRange(phone: String, category: String, startMillis: Long, endMillis: Long): Flow<Double?>
+
+    /** Total spent (expenses only) in a date range */
+    @Query("SELECT SUM(baseAmount) FROM personal_expenses WHERE userPhone = :phone AND type = 'EXPENSE' AND createdAt >= :startMillis AND createdAt <= :endMillis")
+    fun getTotalSpentInRange(phone: String, startMillis: Long, endMillis: Long): Flow<Double?>
 }

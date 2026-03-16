@@ -55,6 +55,22 @@ interface GroupDao {
 
     @Query("SELECT * FROM groups WHERE id = :groupId LIMIT 1")
     suspend fun getGroupById(groupId: String): GroupEntity?
+
+    @Query("SELECT COUNT(*) FROM group_members WHERE groupId = :groupId")
+    suspend fun getMemberCount(groupId: String): Int
+
+    @Query("""
+        SELECT 
+            gm.phone as phone,
+            gm.joinedAt as joinedAt,
+            c.name as contactName,
+            c.isGhost as isGhost
+        FROM group_members gm
+        LEFT JOIN contacts c ON gm.phone = c.phone
+        WHERE gm.groupId = :groupId
+        LIMIT 5
+    """)
+    suspend fun getGroupMembersOnce(groupId: String): List<GroupMemberInfo>
     
     @Delete
     suspend fun deleteGroup(group: GroupEntity)

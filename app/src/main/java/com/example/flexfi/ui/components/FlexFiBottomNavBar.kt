@@ -1,12 +1,16 @@
 package com.example.flexfi.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -22,8 +26,9 @@ enum class BottomNavTab(
 ) {
     HOME("Home", Icons.Filled.Home, Icons.Outlined.Home),
     GROUPS("Groups", Icons.Filled.Groups, Icons.Outlined.Groups),
-    CONTACTS("Contacts", Icons.Filled.Person, Icons.Outlined.Person),
-    PROFILE("Profile", Icons.Filled.Person, Icons.Outlined.Person)
+    CONTACTS("Contacts", Icons.Filled.People, Icons.Outlined.People),
+    EXPENSES("Expenses", Icons.Filled.Receipt, Icons.Outlined.Receipt),
+    PROFILE("Profile", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle)
 }
 
 @Composable
@@ -32,7 +37,7 @@ fun FlexFiBottomNavBar(
     onTabSelected: (BottomNavTab) -> Unit
 ) {
     NavigationBar(
-        containerColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp
     ) {
         BottomNavTab.entries.forEach { tab ->
@@ -55,8 +60,8 @@ fun FlexFiBottomNavBar(
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = FlexFiBlue,
                     selectedTextColor = FlexFiBlue,
-                    unselectedIconColor = FlexFiLightText,
-                    unselectedTextColor = FlexFiLightText,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     indicatorColor = Color.Transparent
                 )
             )

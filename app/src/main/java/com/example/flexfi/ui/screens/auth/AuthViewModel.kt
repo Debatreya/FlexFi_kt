@@ -38,9 +38,13 @@ class AuthViewModel(
     val authState: StateFlow<AuthState> = _authState
 
     private var verificationId: String? = null
+    private var lastPhoneNumber: String? = null
+    private var lastActivity: java.lang.ref.WeakReference<Activity>? = null
 
     fun sendOtp(phoneNumber: String, activity: Activity) {
         _authState.value = AuthState.Loading
+        lastPhoneNumber = phoneNumber
+        lastActivity = java.lang.ref.WeakReference(activity)
         val options = PhoneAuthOptions.newBuilder(com.google.firebase.auth.FirebaseAuth.getInstance())
             .setPhoneNumber(phoneNumber)
             .setTimeout(60L, TimeUnit.SECONDS)
@@ -61,6 +65,13 @@ class AuthViewModel(
             .build()
         PhoneAuthProvider.verifyPhoneNumber(options)
     }
+
+    fun resendOtp() {
+        val phone = lastPhoneNumber ?: return
+        val activity = lastActivity?.get() ?: return
+        sendOtp(phone, activity)
+    }
+
 
     fun verifyOtp(otp: String) {
         _authState.value = AuthState.Loading

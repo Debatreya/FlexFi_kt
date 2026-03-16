@@ -1,6 +1,7 @@
 package com.example.flexfi.ui.screens.goals
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,24 +22,33 @@ import com.example.flexfi.ui.theme.*
 import com.example.flexfi.utils.CurrencyProvider
 import java.text.SimpleDateFormat
 import java.util.*
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetGoalsScreen(
     viewModel: BudgetGoalViewModel,
     onAddGoalClick: () -> Unit,
+    onEditGoalClick: (String) -> Unit = {},
+    onGoalClick: (String) -> Unit = {},
     onBack: () -> Unit
 ) {
     val goals by viewModel.goals.collectAsState()
     val totalSaved by viewModel.totalSaved.collectAsState()
     val totalTarget by viewModel.totalTarget.collectAsState()
     val achievements by viewModel.achievements.collectAsState()
+    val context = LocalContext.current
 
     val overallProgress = if (totalTarget > 0) (totalSaved / totalTarget).toFloat().coerceIn(0f, 1f) else 0f
 
     var showSavingsDialog by remember { mutableStateOf(false) }
     var selectedGoalId by remember { mutableStateOf("") }
     var savingsAmount by remember { mutableStateOf("") }
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteGoalId by remember { mutableStateOf("") }
+    var deleteGoalTitle by remember { mutableStateOf("") }
 
     // Add savings dialog
     if (showSavingsDialog) {
@@ -66,7 +76,10 @@ fun BudgetGoalsScreen(
                 TextButton(onClick = {
                     val amount = savingsAmount.toDoubleOrNull()
                     if (amount != null && amount > 0) {
-                        viewModel.addSavings(selectedGoalId, amount)
+                        viewModel.addSavings(selectedGoalId, amount) { message ->
+                            // Show milestone notification as Toast
+                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                        }
                         showSavingsDialog = false
                         savingsAmount = ""
                     }
@@ -78,18 +91,31 @@ fun BudgetGoalsScreen(
         )
     }
 
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Goal") },
+            text = { Text("Are you sure you want to delete \"$deleteGoalTitle\"? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteGoal(deleteGoalId)
+                    showDeleteDialog = false
+                }) { Text("Delete", color = FlexFiRed, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
                 title = "Your Goals",
                 showBackButton = true,
-                onBackClick = onBack,
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Notifications, "Notifications", tint = FlexFiDarkText)
-                    }
-                }
+                onBackClick = onBack
             )
         },
         floatingActionButton = {
@@ -156,7 +182,7 @@ fun BudgetGoalsScreen(
 
             // Active Goals
             item {
-                Text("Active Goals", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                Text("Active Goals", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
             }
 
             if (goals.isEmpty()) {
@@ -179,9 +205,11 @@ fun BudgetGoalsScreen(
                     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
 
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onGoalClick(goal.id) },
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -200,8 +228,14 @@ fun BudgetGoalsScreen(
                                 }
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(goal.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = FlexFiDarkText)
-                                    if (goal.targetDate != null) {
+                                    Text(goal.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                                    if (goal.isSinkingFund && goal.targetDate != null) {
+                                        Text(
+                                            "🎯 Sinking Fund: ${dateFormat.format(Date(goal.targetDate))}",
+                                            fontSize = 12.sp,
+                                            color = FlexFiOrange
+                                        )
+                                    } else if (goal.targetDate != null) {
                                         Text(
                                             "Target: ${dateFormat.format(Date(goal.targetDate))}",
                                             fontSize = 12.sp,
@@ -273,7 +307,11 @@ fun BudgetGoalsScreen(
                                     Text("Add Savings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                                 OutlinedButton(
-                                    onClick = { viewModel.deleteGoal(goal.id) },
+                                    onClick = {
+                                        deleteGoalId = goal.id
+                                        deleteGoalTitle = goal.title
+                                        showDeleteDialog = true
+                                    },
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.height(32.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
@@ -292,7 +330,7 @@ fun BudgetGoalsScreen(
             if (achievements.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(4.dp))
-                    Text("Achievements & Milestones", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                    Text("Achievements & Milestones", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -336,7 +374,7 @@ fun BudgetGoalsScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = FlexFiWhite)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -345,7 +383,7 @@ fun BudgetGoalsScreen(
                         Icon(Icons.Default.Schedule, null, tint = FlexFiBlue, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Auto-Save Schedule", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = FlexFiDarkText)
+                            Text("Auto-Save Schedule", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Text("Set auto-save for your goals when creating them", fontSize = 12.sp, color = FlexFiBodyText)
                         }
                     }

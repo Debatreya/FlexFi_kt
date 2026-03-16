@@ -54,10 +54,6 @@ class GroupRepository(
     suspend fun syncGroupsForUser(userPhone: String) {
         val remoteGroups = firestoreGroupService.getGroupsForPhone(userPhone)
 
-        // Clear stale local data and re-sync from Firestore (source of truth)
-        groupDao.deleteAllGroupMembers()
-        groupDao.deleteAllGroups()
-
         remoteGroups.forEach { doc ->
             val groupEntity = GroupEntity(
                 id = doc.id,
@@ -68,6 +64,9 @@ class GroupRepository(
                 totalExpense = 0.0
             )
             groupDao.insertGroup(groupEntity)
+
+            // Refresh membership for this specific group only.
+            groupDao.removeAllMembers(doc.id)
 
             for (phone in doc.memberPhones) {
                 groupDao.insertMember(
@@ -89,6 +88,12 @@ class GroupRepository(
 
     fun getGroupMembers(groupId: String): Flow<List<GroupMemberInfo>> =
         groupDao.getGroupMembersInfo(groupId)
+
+    suspend fun getMemberCount(groupId: String): Int =
+        groupDao.getMemberCount(groupId)
+
+    suspend fun getGroupMembersOnce(groupId: String): List<GroupMemberInfo> =
+        groupDao.getGroupMembersOnce(groupId)
 
     suspend fun getGroupById(groupId: String): GroupEntity? =
         groupDao.getGroupById(groupId)

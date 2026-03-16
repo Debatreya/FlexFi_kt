@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -20,6 +22,9 @@ import com.example.flexfi.ui.components.*
 import com.example.flexfi.ui.theme.*
 import com.example.flexfi.utils.CurrencyProvider
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,12 +34,20 @@ fun AddEditGoalScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var targetAmount by remember { mutableStateOf("") }
     var autoSaveAmount by remember { mutableStateOf("") }
     var autoSaveFrequency by remember { mutableStateOf("monthly") }
     var isEditing by remember { mutableStateOf(false) }
+    var isSinkingFund by remember { mutableStateOf(false) }
+    var targetDate by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val dateLabel = remember(targetDate) {
+        targetDate?.let { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it)) } ?: "Select target date"
+    }
 
     // Load existing goal if editing
     LaunchedEffect(goalId) {
@@ -47,12 +60,14 @@ fun AddEditGoalScreen(
                 targetAmount = "%.2f".format(goal.targetAmount)
                 autoSaveAmount = if (goal.autoSaveAmount > 0) "%.2f".format(goal.autoSaveAmount) else ""
                 autoSaveFrequency = goal.autoSaveFrequency
+                isSinkingFund = goal.isSinkingFund
+                targetDate = goal.targetDate
             }
         }
     }
 
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
                 title = if (isEditing) "Edit Goal" else "Create Goal",
@@ -61,6 +76,26 @@ fun AddEditGoalScreen(
             )
         }
     ) { padding ->
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = targetDate ?: System.currentTimeMillis()
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { targetDate = it }
+                        showDatePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                }
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -74,11 +109,11 @@ fun AddEditGoalScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("GOAL DETAILS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FlexFiBodyText, letterSpacing = 1.sp)
+                    Text("GOAL DETAILS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
 
                     FlexFiTextField(
                         value = title,
@@ -111,11 +146,11 @@ fun AddEditGoalScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("AUTO-SAVE (OPTIONAL)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FlexFiBodyText, letterSpacing = 1.sp)
+                    Text("AUTO-SAVE (OPTIONAL)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
 
                     FlexFiTextField(
                         value = autoSaveAmount,
@@ -126,7 +161,7 @@ fun AddEditGoalScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
 
-                    Text("Frequency", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = FlexFiDarkText)
+                    Text("Frequency", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("weekly" to "Weekly", "monthly" to "Monthly").forEach { (freq, label) ->
                             FilterChip(
@@ -144,6 +179,43 @@ fun AddEditGoalScreen(
                 }
             }
 
+            // Sinking Fund settings
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("SINKING FUND", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+                            Text("Set a target date to reach this goal", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = isSinkingFund,
+                            onCheckedChange = { isSinkingFund = it }
+                        )
+                    }
+
+                    if (isSinkingFund) {
+                        FlexFiTextField(
+                            value = dateLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = "Target Date",
+                            leadingIcon = Icons.Default.CalendarToday,
+                            trailingIcon = {
+                                TextButton(onClick = { showDatePicker = true }) { Text("Change", color = FlexFiBlue) }
+                            }
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
 
             FlexFiPrimaryButton(
@@ -157,7 +229,7 @@ fun AddEditGoalScreen(
                     val autoSave = autoSaveAmount.toDoubleOrNull() ?: 0.0
 
                     if (isEditing && goalId != null) {
-                        kotlinx.coroutines.MainScope().launch {
+                        scope.launch {
                             val existing = viewModel.getGoalById(goalId)
                             if (existing != null) {
                                 viewModel.updateGoal(
@@ -166,20 +238,23 @@ fun AddEditGoalScreen(
                                         description = description,
                                         targetAmount = target,
                                         autoSaveAmount = autoSave,
-                                        autoSaveFrequency = autoSaveFrequency
+                                        autoSaveFrequency = autoSaveFrequency,
+                                        isSinkingFund = isSinkingFund,
+                                        targetDate = if (isSinkingFund) targetDate else null
                                     )
                                 )
                             }
+                            onBack()
                         }
-                        onBack()
                     } else {
                         viewModel.createGoal(
                             title = title,
                             description = description,
                             targetAmount = target,
-                            targetDate = null,
+                            targetDate = if (isSinkingFund) targetDate else null,
                             autoSaveAmount = autoSave,
                             autoSaveFrequency = autoSaveFrequency,
+                            isSinkingFund = isSinkingFund,
                             onSuccess = { onBack() },
                             onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
                         )

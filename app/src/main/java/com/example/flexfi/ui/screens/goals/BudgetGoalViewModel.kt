@@ -3,6 +3,7 @@ package com.example.flexfi.ui.screens.goals
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.BudgetGoalEntity
+import com.example.flexfi.data.local.entities.GoalContributionEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.repository.BudgetGoalRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +35,9 @@ class BudgetGoalViewModel(
 
     private val _achievements = MutableStateFlow<List<Achievement>>(emptyList())
     val achievements: StateFlow<List<Achievement>> = _achievements.asStateFlow()
+
+    private val _selectedGoalContributions = MutableStateFlow<List<GoalContributionEntity>>(emptyList())
+    val selectedGoalContributions: StateFlow<List<GoalContributionEntity>> = _selectedGoalContributions.asStateFlow()
 
     init {
         loadGoals()
@@ -77,6 +81,7 @@ class BudgetGoalViewModel(
         targetDate: Long?,
         autoSaveAmount: Double,
         autoSaveFrequency: String,
+        isSinkingFund: Boolean,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -89,7 +94,8 @@ class BudgetGoalViewModel(
                     targetAmount = targetAmount,
                     targetDate = targetDate,
                     autoSaveAmount = autoSaveAmount,
-                    autoSaveFrequency = autoSaveFrequency
+                    autoSaveFrequency = autoSaveFrequency,
+                    isSinkingFund = isSinkingFund
                 )
                 onSuccess()
             } catch (e: Exception) {
@@ -98,9 +104,38 @@ class BudgetGoalViewModel(
         }
     }
 
-    fun addSavings(goalId: String, amount: Double) {
+    fun addSavings(goalId: String, amount: Double, note: String = "", onMilestoneReached: ((String) -> Unit)? = null) {
         viewModelScope.launch {
-            budgetGoalRepository.addSavings(goalId, amount)
+            val goal = budgetGoalRepository.getGoalById(goalId) ?: return@launch
+            val newSaved = goal.savedAmount + amount
+            val percentage = if (goal.targetAmount > 0) (newSaved / goal.targetAmount) * 100 else 0.0
+
+            val currentMilestone = when {
+                percentage >= 100 -> 100
+                percentage >= 75 -> 75
+                percentage >= 50 -> 50
+                percentage >= 25 -> 25
+                else -> 0
+            }
+
+            if (currentMilestone > goal.lastNotifiedMilestone) {
+                onMilestoneReached?.invoke("🎉 Congratulations! You have reached $currentMilestone% of your goal: ${goal.title}")
+                budgetGoalRepository.addSavings(goalId, amount, note)
+                budgetGoalRepository.updateGoal(
+                    // Fetch directly from DB after addSavings since addSavings saves the history
+                    budgetGoalRepository.getGoalById(goalId)?.copy(lastNotifiedMilestone = currentMilestone) ?: return@launch
+                )
+            } else {
+                budgetGoalRepository.addSavings(goalId, amount, note)
+            }
+        }
+    }
+
+    fun loadContributionsForGoal(goalId: String) {
+        viewModelScope.launch {
+            budgetGoalRepository.getContributionsForGoal(goalId).collect {
+                _selectedGoalContributions.value = it
+            }
         }
     }
 

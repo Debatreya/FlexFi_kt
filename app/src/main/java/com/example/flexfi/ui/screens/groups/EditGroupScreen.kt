@@ -4,14 +4,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.flexfi.ui.components.*
 import com.example.flexfi.ui.screens.contacts.ContactViewModel
+import com.example.flexfi.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -19,7 +24,8 @@ fun EditGroupScreen(
     groupId: String,
     groupViewModel: GroupViewModel,
     contactViewModel: ContactViewModel,
-    onGroupUpdated: () -> Unit
+    onGroupUpdated: () -> Unit,
+    onBack: () -> Unit = {}
 ) {
     var groupName by remember { mutableStateOf("") }
     val contacts by contactViewModel.contacts.collectAsState()
@@ -34,7 +40,7 @@ fun EditGroupScreen(
         isLoading = false
     }
 
-    // Fetch current members for pre-selection using their phone numbers
+    // Fetch current members for pre-selection
     val currentMembers by groupViewModel.getGroupMembers(groupId).collectAsState(initial = emptyList())
     LaunchedEffect(currentMembers) {
         if (currentMembers.isNotEmpty() && selectedMembers.isEmpty()) {
@@ -45,60 +51,136 @@ fun EditGroupScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Edit Group") }) }
+        containerColor = FlexFiGreySurface,
+        topBar = {
+            FlexFiTopBar(
+                title = "Edit Group",
+                showBackButton = true,
+                onBackClick = onBack
+            )
+        }
     ) { padding ->
         if (isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                CircularProgressIndicator()
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = FlexFiBlue)
             }
         } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(
-                    value = groupName,
-                    onValueChange = { groupName = it },
-                    label = { Text("Group Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Spacer(Modifier.height(4.dp))
 
-                Text("Select Members", style = MaterialTheme.typography.titleMedium)
+                // Group details card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text("GROUP DETAILS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FlexFiBodyText, letterSpacing = 1.sp)
 
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(contacts) { contact ->
-                        val isSelected = selectedMembers.contains(contact.phone)
-                        ListItem(
-                            headlineContent = { Text(contact.name) },
-                            leadingContent = { Icon(Icons.Default.Person, contentDescription = null) },
-                            trailingContent = {
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = "Selected", tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            modifier = Modifier.clickable {
-                                if (isSelected) selectedMembers.remove(contact.phone)
-                                else selectedMembers.add(contact.phone)
-                            }
+                        FlexFiTextField(
+                            value = groupName,
+                            onValueChange = { groupName = it },
+                            label = "Group Name",
+                            leadingIcon = Icons.Default.Group
                         )
-                        HorizontalDivider()
                     }
                 }
 
-                Button(
+                // Members selection card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                    elevation = CardDefaults.cardElevation(2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Text("SELECT MEMBERS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FlexFiBodyText, letterSpacing = 1.sp)
+                        Spacer(Modifier.height(8.dp))
+                        LazyColumn {
+                            items(contacts) { contact ->
+                                val isSelected = selectedMembers.contains(contact.phone)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                        .clickable {
+                                            if (isSelected) selectedMembers.remove(contact.phone)
+                                            else selectedMembers.add(contact.phone)
+                                        },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) FlexFiLightBlue else FlexFiGreySurface
+                                    ),
+                                    elevation = CardDefaults.cardElevation(0.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        FlexFiAvatar(
+                                            name = contact.name,
+                                            size = AvatarSize.SMALL,
+                                            isGhost = contact.isGhost
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                contact.name,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 14.sp,
+                                                color = FlexFiDarkText
+                                            )
+                                            Text(
+                                                contact.phone,
+                                                fontSize = 12.sp,
+                                                color = FlexFiBodyText
+                                            )
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                Icons.Default.CheckCircle,
+                                                "Selected",
+                                                tint = FlexFiBlue,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                FlexFiPrimaryButton(
+                    text = "Update Group",
                     onClick = {
                         val selectedEntities = contacts.filter { selectedMembers.contains(it.phone) }
-                        groupViewModel.updateGroup(groupId, groupName, selectedEntities)
-                        onGroupUpdated()
+                        groupViewModel.updateGroup(
+                            groupId = groupId,
+                            newName = groupName,
+                            selectedContacts = selectedEntities,
+                            onComplete = onGroupUpdated
+                        )
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = groupName.isNotBlank()
-                ) {
-                    Text("Update Group")
-                }
+                    enabled = groupName.isNotBlank(),
+                    trailingIcon = {
+                        Icon(Icons.Default.Check, null, tint = FlexFiWhite, modifier = Modifier.size(18.dp))
+                    }
+                )
+
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

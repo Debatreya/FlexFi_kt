@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Delete
 import com.example.flexfi.data.local.entities.BudgetGoalEntity
+import com.example.flexfi.data.local.entities.GoalContributionEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -34,4 +35,11 @@ interface BudgetGoalDao {
 
     @Query("DELETE FROM budget_goals WHERE id = :goalId")
     suspend fun deleteById(goalId: String)
+
+    // --- Contributions ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertContribution(contribution: GoalContributionEntity)
+
+    @Query("SELECT * FROM goal_contributions WHERE goalId = :goalId ORDER BY date DESC")
+    fun getContributionsForGoal(goalId: String): Flow<List<GoalContributionEntity>>
 }

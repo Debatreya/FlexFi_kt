@@ -30,7 +30,8 @@ fun GroupDetailScreen(
     expenseViewModel: ExpenseViewModel,
     onEditClick: (String) -> Unit,
     onDeleteSuccess: () -> Unit,
-    onAddExpenseClick: (String) -> Unit
+    onAddExpenseClick: (String) -> Unit,
+    onExpenseClick: (String) -> Unit
 ) {
     var group by remember { mutableStateOf<GroupEntity?>(null) }
     val members by viewModel.getGroupMembers(groupId).collectAsState(initial = emptyList())
@@ -155,7 +156,7 @@ fun GroupDetailScreen(
                                 Text("GROUP TOTAL", fontSize = 10.sp, color = FlexFiWhite.copy(alpha = 0.7f), fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = CurrencyProvider.formatAmount(expenses.sumOf { it.amount }),
+                                    text = CurrencyProvider.formatAmount(expenses.sumOf { it.baseAmount }),
                                     fontSize = 22.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = FlexFiWhite
@@ -221,12 +222,13 @@ fun GroupDetailScreen(
                     FlexFiExpenseCard(
                         title = expense.title,
                         subtitle = "Paid by $paidByName • ${expense.category}",
-                        amount = CurrencyProvider.formatAmount(expense.amount),
+                        amount = CurrencyProvider.formatAmount(expense.baseAmount),
                         statusText = "SPLIT",
                         statusColor = FlexFiBlue,
                         icon = icon,
                         iconBgColor = FlexFiLightBlue,
-                        iconTint = FlexFiBlue
+                        iconTint = FlexFiBlue,
+                        onClick = { onExpenseClick(expense.id) }
                     )
                 }
             }

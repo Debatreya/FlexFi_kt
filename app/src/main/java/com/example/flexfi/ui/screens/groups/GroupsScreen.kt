@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.flexfi.data.local.dao.GroupMemberInfo
 import com.example.flexfi.ui.components.*
 import com.example.flexfi.ui.theme.*
 import com.example.flexfi.utils.CurrencyProvider
@@ -29,6 +30,7 @@ fun GroupsScreen(
     onGroupClick: (String) -> Unit,
     onHomeTab: () -> Unit,
     onContactsTab: () -> Unit,
+    onExpensesTab: () -> Unit,
     onProfileTab: () -> Unit
 ) {
     val groups by viewModel.groups.collectAsState()
@@ -36,21 +38,37 @@ fun GroupsScreen(
     var showSearch by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(BottomNavTab.GROUPS) }
 
+    // Cache member data per group
+    var memberCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var memberInfos by remember { mutableStateOf<Map<String, List<GroupMemberInfo>>>(emptyMap()) }
+
     LaunchedEffect(Unit) {
         viewModel.refreshGroups()
+    }
+
+    // Load member data when groups change
+    LaunchedEffect(groups) {
+        val counts = mutableMapOf<String, Int>()
+        val infos = mutableMapOf<String, List<GroupMemberInfo>>()
+        for (group in groups) {
+            counts[group.id] = viewModel.getMemberCount(group.id)
+            infos[group.id] = viewModel.getGroupMembersOnce(group.id)
+        }
+        memberCounts = counts
+        memberInfos = infos
     }
 
     val filtered = if (searchQuery.isBlank()) groups
                    else groups.filter { it.name.contains(searchQuery, ignoreCase = true) }
 
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
                 title = "Groups",
                 actions = {
                     IconButton(onClick = { showSearch = !showSearch }) {
-                        Icon(Icons.Default.Search, "Search", tint = FlexFiDarkText)
+                        Icon(Icons.Default.Search, "Search", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             )
@@ -63,6 +81,7 @@ fun GroupsScreen(
                     when (tab) {
                         BottomNavTab.HOME -> onHomeTab()
                         BottomNavTab.CONTACTS -> onContactsTab()
+                        BottomNavTab.EXPENSES -> onExpensesTab()
                         BottomNavTab.PROFILE -> onProfileTab()
                         else -> {}
                     }
@@ -110,15 +129,20 @@ fun GroupsScreen(
                 }
             } else {
                 items(filtered) { group ->
+                    val totalExpense by viewModel.getGroupTotalExpense(group.id).collectAsState(initial = 0.0)
+
                     // Group emoji based on name hash
                     val emojis = listOf("🏠", "✈️", "🎮", "🍕", "🎉", "💰", "🎬", "☕")
                     val emoji = emojis[kotlin.math.abs(group.name.hashCode()) % emojis.size]
 
+                    val count = memberCounts[group.id] ?: 0
+                    val members = memberInfos[group.id] ?: emptyList()
+
                     FlexFiGroupCard(
                         name = group.name,
-                        memberCount = 0, // Will be enriched with real data
-                        totalBalance = CurrencyProvider.formatAmount(group.totalExpense),
-                        balanceColor = if (group.totalExpense >= 0) FlexFiGreen else FlexFiRed,
+                        memberCount = count,
+                        totalBalance = CurrencyProvider.formatAmount(totalExpense),
+                        balanceColor = if (totalExpense >= 0) FlexFiGreen else FlexFiRed,
                         latestActivity = "Tap to view",
                         groupIcon = {
                             Surface(
@@ -132,15 +156,17 @@ fun GroupsScreen(
                             }
                         },
                         memberAvatars = {
-                            // Placeholder avatars
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy((-8).dp)
-                            ) {
-                                items(3) { i ->
-                                    FlexFiAvatar(
-                                        name = "M${i + 1}",
-                                        size = AvatarSize.SMALL
-                                    )
+                            if (members.isNotEmpty()) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy((-8).dp)
+                                ) {
+                                    items(members) { member ->
+                                        FlexFiAvatar(
+                                            name = member.contactName ?: member.phone.takeLast(4),
+                                            size = AvatarSize.SMALL,
+                                            isGhost = member.isGhost == true
+                                        )
+                                    }
                                 }
                             }
                         },

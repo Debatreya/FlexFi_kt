@@ -28,6 +28,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE groupId = :groupId ORDER BY createdAt DESC")
     suspend fun getExpensesForGroupOnce(groupId: String): List<ExpenseEntity>
 
+    @Query("SELECT COALESCE(SUM(baseAmount), 0.0) FROM expenses WHERE groupId = :groupId")
+    fun getGroupTotalExpense(groupId: String): Flow<Double>
+
     @Query("SELECT * FROM expense_splits WHERE expenseId = :expenseId")
     fun getSplitsForExpense(expenseId: String): Flow<List<ExpenseSplitEntity>>
 

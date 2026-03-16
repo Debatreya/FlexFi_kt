@@ -160,35 +160,6 @@ fun LoginScreen(
                         }
                     )
 
-                    Spacer(Modifier.height(20.dp))
-
-                    // OR divider
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = FlexFiGreyBorder)
-                        Text(
-                            " OR ",
-                            fontSize = 12.sp,
-                            color = FlexFiLightText,
-                            fontWeight = FontWeight.Medium
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = FlexFiGreyBorder)
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-
-                    // Google sign in
-                    OutlinedButton(
-                        onClick = { /* TODO: Google sign in */ },
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = ButtonDefaults.outlinedButtonBorder(true)
-                    ) {
-                        Text("Continue with Google", fontWeight = FontWeight.Medium)
-                    }
-
                     if (authState is AuthState.Error) {
                         Spacer(Modifier.height(12.dp))
                         Text(

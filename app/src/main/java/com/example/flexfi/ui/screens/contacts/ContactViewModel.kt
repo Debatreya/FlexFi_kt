@@ -28,10 +28,11 @@ class ContactViewModel(
         }
     }
 
-    fun addContact(name: String, phone: String) {
+    fun addContact(name: String, phone: String, onComplete: () -> Unit = {}) {
         val userPhone = authService.getCurrentUser()?.phoneNumber ?: return
         viewModelScope.launch {
             contactRepository.addContact(name, phone, userPhone)
+            onComplete()
         }
     }
 

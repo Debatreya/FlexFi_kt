@@ -13,8 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,7 +24,8 @@ import com.example.flexfi.ui.theme.*
 @Composable
 fun OtpScreen(
     viewModel: AuthViewModel,
-    onVerified: (AuthState) -> Unit
+    onVerified: (AuthState) -> Unit,
+    onBack: () -> Unit = {}
 ) {
     var digits by remember { mutableStateOf(listOf("", "", "", "", "", "")) }
     val authState by viewModel.authState.collectAsState()
@@ -53,7 +52,7 @@ fun OtpScreen(
     ) {
         // Back button
         IconButton(
-            onClick = { /* TODO: handle back */ },
+            onClick = onBack,
             modifier = Modifier.size(40.dp)
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = FlexFiDarkText)
@@ -120,13 +119,29 @@ fun OtpScreen(
                 modifier = Modifier.size(16.dp)
             )
             Spacer(Modifier.width(4.dp))
-            Text(
-                text = if (timer > 0) "Resend in 00:${"%02d".format(timer)}"
-                       else "Resend Code",
-                fontSize = 13.sp,
-                color = if (timer > 0) FlexFiBodyText else FlexFiBlue,
-                fontWeight = if (timer > 0) FontWeight.Normal else FontWeight.SemiBold
-            )
+            if (timer > 0) {
+                Text(
+                    text = "Resend in 00:${"%02d".format(timer)}",
+                    fontSize = 13.sp,
+                    color = FlexFiBodyText,
+                    fontWeight = FontWeight.Normal
+                )
+            } else {
+                TextButton(
+                    onClick = {
+                        timer = 59
+                        viewModel.resendOtp()
+                    },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = "Resend Code",
+                        fontSize = 13.sp,
+                        color = FlexFiBlue,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
         }
 
         if (authState is AuthState.Error) {

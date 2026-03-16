@@ -3,6 +3,7 @@ package com.example.flexfi.ui.screens.expenses
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.ExpenseEntity
+import com.example.flexfi.data.local.entities.ExpenseSplitEntity
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.Settlement
@@ -27,10 +28,14 @@ class ExpenseViewModel(
     private val _balances = MutableStateFlow<Map<String, Double>>(emptyMap())
     val balances: StateFlow<Map<String, Double>> = _balances.asStateFlow()
 
+    private val _currentSplits = MutableStateFlow<List<ExpenseSplitEntity>>(emptyList())
+    val currentSplits: StateFlow<List<ExpenseSplitEntity>> = _currentSplits.asStateFlow()
+
     private val _settlements = MutableStateFlow<List<Settlement>>(emptyList())
     val settlements: StateFlow<List<Settlement>> = _settlements.asStateFlow()
 
     private var expenseCollectionJob: Job? = null
+    private var splitCollectionJob: Job? = null
 
     fun loadExpensesForGroup(groupId: String) {
         expenseCollectionJob?.cancel()
@@ -58,6 +63,7 @@ class ExpenseViewModel(
     fun addExpense(
         title: String,
         amount: Double,
+        currency: String,
         groupId: String,
         paidByPhone: String,
         category: String,
@@ -72,6 +78,7 @@ class ExpenseViewModel(
                 expenseRepository.addExpense(
                     title = title,
                     amount = amount,
+                    currency = currency,
                     groupId = groupId,
                     paidByPhone = paidByPhone,
                     category = category,
@@ -86,6 +93,32 @@ class ExpenseViewModel(
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "An error occurred")
+            }
+        }
+    }
+
+    fun loadSplitsForExpense(expenseId: String) {
+        splitCollectionJob?.cancel()
+        splitCollectionJob = viewModelScope.launch {
+            expenseRepository.getSplitsForExpense(expenseId).collect { splits ->
+                _currentSplits.value = splits
+            }
+        }
+    }
+
+    fun deleteExpense(
+        expenseId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                expenseRepository.deleteExpense(expenseId)
+                _expenses.value = _expenses.value.filterNot { it.id == expenseId }
+                _currentSplits.value = emptyList()
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to delete expense")
             }
         }
     }

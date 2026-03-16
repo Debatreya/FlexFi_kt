@@ -59,6 +59,108 @@ FlexFi isn’t just tracking balances—it helps shape habit cycles via immediat
 
 ---
 
+# 🛠️ Integrity Hotfix — Spending, Balance, and Decimal Accuracy (March 2026)
+
+This patch resolved three critical trust-breaking issues reported during real usage:
+
+1. **Your Spending showed `₹0.00` despite existing expenses**
+2. **Home balance stayed static instead of reflecting true cash movement**
+3. **Entered round amounts (e.g., `₹400`) appeared as odd decimals (`₹399.82`)**
+
+These bugs were not cosmetic. They were caused by mismatches between:
+- base-currency storage (`USD`)
+- display-currency rendering (`INR` / selected currency)
+- and where/when computed state was updated.
+
+## Root Cause Analysis
+
+### A) Monthly spending state was not being maintained correctly
+- The monthly spending card relied on a view model total that was not consistently recomputed from the active monthly dataset.
+- Result: UI could remain stale and show `0.00` even when the list had entries.
+
+### B) Dashboard balance was reading saved settings, not live net cashflow
+- `currentBankBalance` from settings existed, but dashboard calculations did not fully reflect:
+  - personal outflow/inflow
+  - actual group cash outflow when the current user paid
+  - actual settlement inflow/outflow when money was repaid
+- Result: dashboard could display a static baseline (for example `20000`) and ignore active spending behavior.
+
+### C) Decimal drift from conversion/rounding path
+- Amounts were stored in base currency and later converted for display.
+- If exchange rate changed (or conversion/rounding path differed), original entered values in same currency could render with drift.
+- Result: users saw non-intuitive values like `399.82` after entering `400`.
+
+## Implemented Fixes
+
+### 1) Fixed monthly spending recomputation (Personal)
+- Monthly total is now recomputed from **current month + EXPENSE type only** records.
+- Logic now updates continuously with expense stream updates.
+- Also aligned category breakdown fallback to the same month-filtered dataset.
+
+### 2) Rebuilt Home balance as derived cashflow
+- Added a derived balance calculation that combines:
+  - base settings balance
+  - personal transaction delta (`INCOME +`, `EXPENSE -`)
+  - group cash outflow where current user is payer
+  - settlement delta (`toUser +`, `fromUser -`)
+- This aligns behavior with real expectation:
+  - if user pays `200` in a group and is owed `100`, balance immediately drops by `200`
+  - balance increases only when that `100` is actually settled/recorded
+
+### 3) Added transaction-aware display formatting
+- Introduced a safe formatter path:
+  - if transaction currency == active display currency, show **original entered amount**
+  - otherwise render converted base amount
+- Applied to recent activity cards and personal spending list to avoid drift artifacts.
+
+### 4) Repository flow support for live dashboard computation
+- Exposed stream accessors for:
+  - all expenses
+  - settlements for current user
+- Enabled dashboard to reactively recompute derived totals whenever source data changes.
+
+## Files Updated (Core)
+
+- `ui/screens/personal/PersonalExpenseViewModel.kt`
+  - Monthly total recomputation fixed.
+
+- `ui/screens/personal/PersonalDashboardScreen.kt`
+  - Category totals aligned to current month expenses.
+  - Transaction-safe amount formatting used in recent items.
+
+- `ui/screens/home/HomeViewModel.kt`
+  - Introduced derived cashflow-based dashboard balance.
+  - Added reactive watchers for expenses/settlements/settings.
+
+- `ui/screens/home/HomeScreen.kt`
+  - Recent activity now uses transaction-safe amount formatter.
+
+- `utils/CurrencyProvider.kt`
+  - Added `formatTransactionAmount(amount, currency, baseAmount)`.
+
+- `data/repository/ExpenseRepository.kt`
+  - Added `getAllExpenses()` and `getSettlementsForUser(phone)` accessors.
+
+## Behavior After Fix
+
+- Spending page monthly card now reflects existing entries correctly.
+- Dashboard no longer behaves as static configured balance; it tracks real movement.
+- Entered round INR values remain round in INR display scenarios.
+- Owe/owed summary remains accurate and independent from cash-on-hand timing.
+
+## Validation Notes
+
+- Static error checks on edited files: **clean**.
+- Build CLI was intentionally **not run** in this cycle (team preference: validation in Android Studio).
+
+## Risk / Follow-up
+
+- Historical records created before this fix may still contain legacy conversion artifacts.
+- Recommended optional next step:
+  - add a one-time reconciliation/migration pass for legacy amount normalization.
+
+---
+
 ### Folder Structure (after Phase 7)
 
 ```

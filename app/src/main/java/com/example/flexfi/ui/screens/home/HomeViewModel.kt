@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
+import com.example.flexfi.data.local.entities.SettlementRecordEntity
 import com.example.flexfi.data.local.entities.StreakEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
+import com.example.flexfi.data.repository.AppSettingsRepository
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.PersonalExpenseRepository
@@ -14,7 +16,6 @@ import com.example.flexfi.data.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class DashboardBalances(
@@ -30,7 +31,8 @@ class HomeViewModel(
     private val groupRepository: GroupRepository,
     private val expenseRepository: ExpenseRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
-    private val streakRepository: StreakRepository
+    private val streakRepository: StreakRepository,
+    private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
     private val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: ""
@@ -46,6 +48,12 @@ class HomeViewModel(
 
     private val _balances = MutableStateFlow(DashboardBalances())
     val balances: StateFlow<DashboardBalances> = _balances.asStateFlow()
+
+    private var settingsBankBalanceBase: Double = 0.0
+    private var cachedPersonalExpenses: List<PersonalExpenseEntity> = emptyList()
+    private var cachedGroupExpenses: List<com.example.flexfi.data.local.entities.ExpenseEntity> = emptyList()
+    private var cachedSettlements: List<SettlementRecordEntity> = emptyList()
+    private var cachedGroups: List<GroupEntity> = emptyList()
 
     val currentUserFlow = userRepository.getCurrentUserFlow()
 
@@ -66,15 +74,43 @@ class HomeViewModel(
         // Load Recent Activity (personal & group combined via the mirror)
         viewModelScope.launch {
             personalExpenseRepository.getExpenses(currentUserPhone).collect { expenses ->
+                cachedPersonalExpenses = expenses
                 _recentActivity.value = expenses.take(10) // Only top 10 for dashboard
+                recalculateTotalBalance()
             }
         }
 
         // Load Active Groups and Calculate Global Balances
         viewModelScope.launch {
             groupRepository.getGroupsForUser(currentUserPhone).collect { groups ->
+                cachedGroups = groups
                 _activeGroups.value = groups
                 calculateGlobalBalances(groups)
+                recalculateTotalBalance()
+            }
+        }
+
+        // Track all locally synced group expenses to capture real cash outflow
+        viewModelScope.launch {
+            expenseRepository.getAllExpenses().collect { expenses ->
+                cachedGroupExpenses = expenses
+                recalculateTotalBalance()
+            }
+        }
+
+        // Track settlements so dashboard balance changes only when money is actually settled
+        viewModelScope.launch {
+            expenseRepository.getSettlementsForUser(currentUserPhone)?.collect { records ->
+                cachedSettlements = records
+                recalculateTotalBalance()
+            }
+        }
+
+        // Keep dashboard total in sync with locally stored bank value.
+        viewModelScope.launch {
+            appSettingsRepository.getSettings().collect {
+                settingsBankBalanceBase = it.currentBankBalance
+                recalculateTotalBalance()
             }
         }
     }
@@ -96,18 +132,47 @@ class HomeViewModel(
         }
 
         val net = totalOwedToYou - totalYouOwe
-        val personalTotalSpent = personalExpenseRepository.getTotalSpent(currentUserPhone).first() ?: 0.0
-        
-        // We can display "Total Balance" as Net or maybe total spent if they wanted a single number 
-        // Let's make "Total Balance" the overall Net (or Total Spent if preferred)
-        // Taking the design "Total Balance: $4,250.80" which looks like Total Net + Personal Savings, but we'll use Total OwedToYou or similar for now.
-        val mainBalance = if (net > 0) net else (personalTotalSpent) // Fallback meaning
+        val currentBankBalance = appSettingsRepository.getSettingsOnce().currentBankBalance
         
         _balances.value = DashboardBalances(
-            totalBalance = mainBalance, 
+            totalBalance = _balances.value.totalBalance.takeIf { it != 0.0 } ?: currentBankBalance,
             youOwe = totalYouOwe,
             owedToYou = totalOwedToYou,
             net = net
         )
+    }
+
+    private fun recalculateTotalBalance() {
+        if (currentUserPhone.isBlank()) return
+
+        val activeGroupIds = cachedGroups.map { it.id }.toHashSet()
+
+        val personalCashDelta = cachedPersonalExpenses
+            .asSequence()
+            .filter { it.source == "PERSONAL" }
+            .sumOf { personal ->
+                when (personal.type.uppercase()) {
+                    "INCOME" -> personal.baseAmount
+                    "EXPENSE" -> -personal.baseAmount
+                    else -> 0.0
+                }
+            }
+
+        val groupCashOut = cachedGroupExpenses
+            .asSequence()
+            .filter { it.groupId in activeGroupIds }
+            .filter { it.paidByPhone == currentUserPhone }
+            .sumOf { it.baseAmount }
+
+        val settlementNet = cachedSettlements.sumOf { record ->
+            when {
+                record.toPhone == currentUserPhone -> record.amount
+                record.fromPhone == currentUserPhone -> -record.amount
+                else -> 0.0
+            }
+        }
+
+        val derivedBalance = settingsBankBalanceBase + personalCashDelta - groupCashOut + settlementNet
+        _balances.value = _balances.value.copy(totalBalance = derivedBalance)
     }
 }

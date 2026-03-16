@@ -28,6 +28,7 @@ fun ContactsScreen(
     onContactsTab: () -> Unit,
     onGroupsTab: () -> Unit,
     onHomeTab: () -> Unit,
+    onExpensesTab: () -> Unit,
     onProfileTab: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -42,17 +43,12 @@ fun ContactsScreen(
     val ghostContacts = filtered.filter { it.isGhost == true }
 
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
                 title = "Contacts",
                 showBackButton = true,
-                onBackClick = onBackClick,
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.MoreVert, "More", tint = FlexFiDarkText)
-                    }
-                }
+                onBackClick = onBackClick
             )
         },
         bottomBar = {
@@ -64,6 +60,7 @@ fun ContactsScreen(
                         BottomNavTab.HOME -> onHomeTab()
                         BottomNavTab.GROUPS -> onGroupsTab()
                         BottomNavTab.CONTACTS -> onContactsTab()
+                        BottomNavTab.EXPENSES -> onExpensesTab()
                         BottomNavTab.PROFILE -> onProfileTab()
                     }
                 }

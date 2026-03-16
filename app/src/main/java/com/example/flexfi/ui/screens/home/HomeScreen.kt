@@ -29,7 +29,8 @@ fun HomeScreen(
     onGroupClick: (String) -> Unit,
     onContactsClick: () -> Unit,
     onGroupsClick: () -> Unit,
-    onPersonalClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onPersonalExpensesClick: () -> Unit,
     onSettleUpClick: () -> Unit,
     onBudgetGoalsClick: () -> Unit,
     onAddExpenseClick: () -> Unit
@@ -41,15 +42,10 @@ fun HomeScreen(
     var selectedTab by remember { mutableStateOf(BottomNavTab.HOME) }
 
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
-                title = "FlexFi",
-                actions = {
-                    IconButton(onClick = { /* notifications */ }) {
-                        Icon(Icons.Default.Notifications, "Notifications", tint = FlexFiDarkText)
-                    }
-                }
+                title = "FlexFi"
             )
         },
         bottomBar = {
@@ -60,7 +56,8 @@ fun HomeScreen(
                     when (tab) {
                         BottomNavTab.GROUPS -> onGroupsClick()
                         BottomNavTab.CONTACTS -> onContactsClick()
-                        BottomNavTab.PROFILE -> onPersonalClick()
+                        BottomNavTab.EXPENSES -> onPersonalExpensesClick()
+                        BottomNavTab.PROFILE -> onProfileClick()
                         else -> {}
                     }
                 }
@@ -85,27 +82,12 @@ fun HomeScreen(
                 FlexFiGradientCard {
                     Text("TOTAL BALANCE", fontSize = 11.sp, color = FlexFiWhite.copy(alpha = 0.7f), fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                     Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = CurrencyProvider.formatAmount(balances.totalBalance),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = FlexFiWhite
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = FlexFiWhite.copy(alpha = 0.2f)
-                        ) {
-                            Text(
-                                text = "+8.4%",
-                                fontSize = 11.sp,
-                                color = FlexFiWhite,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = CurrencyProvider.formatAmount(balances.totalBalance),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = FlexFiWhite
+                    )
                 }
             }
 
@@ -169,7 +151,7 @@ fun HomeScreen(
             // Active Groups
             if (activeGroups.isNotEmpty()) {
                 item {
-                    Text("Active Groups", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                    Text("Active Groups", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
                 item {
                     LazyRow(
@@ -181,7 +163,7 @@ fun HomeScreen(
                                     .width(140.dp)
                                     .clickable { onGroupClick(group.id) },
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                 elevation = CardDefaults.cardElevation(1.dp)
                             ) {
                                 Column(
@@ -197,7 +179,7 @@ fun HomeScreen(
                                         text = group.name,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = FlexFiDarkText,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1
                                     )
                                 }
@@ -227,12 +209,12 @@ fun HomeScreen(
                                         "${s.currentStreak}-Day Streak!",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,
-                                        color = FlexFiDarkText
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         "Keep logging expenses daily",
                                         fontSize = 12.sp,
-                                        color = FlexFiBodyText
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -249,8 +231,8 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Recent Activity", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
-                        TextButton(onClick = onPersonalClick) {
+                        Text("Recent Activity", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        TextButton(onClick = onPersonalExpensesClick) {
                             Text("See All", fontSize = 13.sp, color = FlexFiBlue)
                         }
                     }
@@ -279,7 +261,11 @@ fun HomeScreen(
                     FlexFiExpenseCard(
                         title = expense.description ?: "Expense",
                         subtitle = expense.category + " • " + (if (expense.source == "GROUP") "Group" else "Personal"),
-                        amount = CurrencyProvider.formatAmount(expense.amount),
+                        amount = CurrencyProvider.formatTransactionAmount(
+                            amount = expense.amount,
+                            currency = expense.currency,
+                            baseAmount = expense.baseAmount
+                        ),
                         icon = icon,
                         iconBgColor = iconColor.copy(alpha = 0.15f),
                         iconTint = iconColor

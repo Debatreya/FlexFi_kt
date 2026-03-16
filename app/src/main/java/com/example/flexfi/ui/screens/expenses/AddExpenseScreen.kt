@@ -49,6 +49,8 @@ fun AddExpenseScreen(
 
     var title by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("0") }
+    var selectedCurrency by remember { mutableStateOf(CurrencyProvider.displayCurrencyCode) }
+    var currencyExpanded by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf(CATEGORIES.first()) }
     var categoryExpanded by remember { mutableStateOf(false) }
     var paidByPhone by remember { mutableStateOf(currentUserPhone) }
@@ -74,12 +76,7 @@ fun AddExpenseScreen(
             FlexFiTopBar(
                 title = "Add Expense",
                 showBackButton = true,
-                onBackClick = onBack,
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Receipt, "Receipt", tint = FlexFiDarkText)
-                    }
-                }
+                onBackClick = onBack
             )
         }
     ) { padding ->
@@ -107,11 +104,40 @@ fun AddExpenseScreen(
                     Text("EXPENSE TOTAL", fontSize = 11.sp, color = FlexFiBodyText, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "${CurrencyProvider.symbol}$amountText",
+                        text = "$selectedCurrency $amountText",
                         fontSize = 36.sp,
                         fontWeight = FontWeight.Bold,
                         color = FlexFiDarkText
                     )
+                }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = currencyExpanded,
+                onExpandedChange = { currencyExpanded = !currencyExpanded }
+            ) {
+                FlexFiTextField(
+                    value = selectedCurrency,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = "Currency",
+                    leadingIcon = Icons.Default.CurrencyExchange,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = currencyExpanded) },
+                    modifier = Modifier.menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = currencyExpanded,
+                    onDismissRequest = { currencyExpanded = false }
+                ) {
+                    CurrencyProvider.supportedCurrencyCodes.forEach { code ->
+                        DropdownMenuItem(
+                            text = { Text(code) },
+                            onClick = {
+                                selectedCurrency = code
+                                currencyExpanded = false
+                            }
+                        )
+                    }
                 }
             }
 
@@ -233,7 +259,7 @@ fun AddExpenseScreen(
                                     exactAmounts = exactAmounts.toMutableMap().apply { put(member.phone, v) }
                                     if (v.isNotEmpty()) selectedPhones = selectedPhones + member.phone
                                 },
-                                label = { Text(CurrencyProvider.symbol) },
+                                label = { Text(selectedCurrency) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 modifier = Modifier.width(90.dp),
                                 singleLine = true,
@@ -274,7 +300,7 @@ fun AddExpenseScreen(
                     } else null
 
                     expenseViewModel.addExpense(
-                        title = title, amount = amount, groupId = groupId,
+                        title = title, amount = amount, currency = selectedCurrency, groupId = groupId,
                         paidByPhone = paidByPhone, category = category,
                         splitType = splitType, selectedMemberPhones = selectedPhones.toList(),
                         exactAmounts = exactMap,

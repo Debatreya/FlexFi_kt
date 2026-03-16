@@ -27,7 +27,7 @@ fun FlexFiGroupCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         onClick = onClick
     ) {
@@ -44,12 +44,12 @@ fun FlexFiGroupCard(
                         text = name,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = FlexFiDarkText
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "$memberCount members",
                         fontSize = 12.sp,
-                        color = FlexFiBodyText
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
@@ -57,7 +57,7 @@ fun FlexFiGroupCard(
                         text = "TOTAL BALANCE",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = FlexFiBodyText
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = totalBalance,
@@ -79,7 +79,7 @@ fun FlexFiGroupCard(
                 Spacer(Modifier.weight(1f))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = FlexFiGreySurface
+                    color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -89,7 +89,7 @@ fun FlexFiGroupCard(
                         Text(
                             text = latestActivity,
                             fontSize = 11.sp,
-                            color = FlexFiBodyText,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
                         )
                     }

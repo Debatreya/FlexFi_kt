@@ -12,11 +12,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.flexfi.ui.theme.*
+import coil.compose.AsyncImage
 
 enum class AvatarSize(val sizeDp: Dp, val fontSize: Int) {
     SMALL(40.dp, 14),
@@ -35,6 +37,7 @@ private val pastelColors = listOf(
 fun FlexFiAvatar(
     name: String,
     modifier: Modifier = Modifier,
+    imageUrl: String? = null,
     size: AvatarSize = AvatarSize.MEDIUM,
     showOnlineDot: Boolean = false,
     isGhost: Boolean = false,
@@ -60,7 +63,14 @@ fun FlexFiAvatar(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (isGhost) {
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Profile photo",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (isGhost) {
                 Icon(
                     Icons.Default.Person,
                     contentDescription = null,

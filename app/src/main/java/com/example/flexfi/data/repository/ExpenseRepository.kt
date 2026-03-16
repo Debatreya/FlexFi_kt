@@ -7,6 +7,7 @@ import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.ExpenseSplitEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 import com.example.flexfi.data.local.entities.SettlementRecordEntity
+import com.example.flexfi.data.remote.ExchangeRateApi
 import com.example.flexfi.data.remote.FirestoreExpenseService
 import com.example.flexfi.data.remote.firestoreModels.ExpenseDoc
 import com.example.flexfi.data.remote.firestoreModels.SplitDoc
@@ -26,6 +27,7 @@ class ExpenseRepository(
     private val expenseDao: ExpenseDao,
     private val firestoreExpenseService: FirestoreExpenseService,
     private val personalExpenseDao: PersonalExpenseDao,
+    private val exchangeRateApi: ExchangeRateApi,
     private val settlementDao: SettlementDao? = null
 ) {
 
@@ -36,6 +38,7 @@ class ExpenseRepository(
     suspend fun addExpense(
         title: String,
         amount: Double,
+        currency: String,
         groupId: String,
         paidByPhone: String,
         category: String,
@@ -45,12 +48,21 @@ class ExpenseRepository(
     ) {
         val expenseId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
+        val rateToBase = exchangeRateApi.getRate(
+            fromCurrency = currency,
+            toCurrency = "USD",
+            dateMillis = now
+        )
+        val baseAmount = amount * rateToBase
 
         val expense = ExpenseEntity(
             id = expenseId,
             groupId = groupId,
             title = title,
             amount = amount,
+            currency = currency,
+            exchangeRateToBase = rateToBase,
+            baseAmount = baseAmount,
             paidByPhone = paidByPhone,
             category = category.ifBlank { "Other" },
             createdAt = now
@@ -67,11 +79,12 @@ class ExpenseRepository(
                     )
                 }
                 selectedMemberPhones.map { phone ->
+                    val originalShare = amounts[phone] ?: 0.0
                     ExpenseSplitEntity(
                         id = UUID.randomUUID().toString(),
                         expenseId = expenseId,
                         memberPhone = phone,
-                        shareAmount = amounts[phone] ?: 0.0
+                        shareAmount = originalShare * rateToBase
                     )
                 }
             }
@@ -86,7 +99,7 @@ class ExpenseRepository(
                             id = UUID.randomUUID().toString(),
                             expenseId = expenseId,
                             memberPhone = selectedMemberPhones[i],
-                            shareAmount = share
+                            shareAmount = share * rateToBase
                         )
                     )
                     totalSplitSoFar += share
@@ -99,7 +112,7 @@ class ExpenseRepository(
                         id = UUID.randomUUID().toString(),
                         expenseId = expenseId,
                         memberPhone = lastMemberPhone,
-                        shareAmount = lastShare
+                        shareAmount = lastShare * rateToBase
                     )
                 )
                 mutableSplits
@@ -115,6 +128,9 @@ class ExpenseRepository(
             groupId = groupId,
             title = title,
             amount = amount,
+            currency = currency,
+            exchangeRateToBase = rateToBase,
+            baseAmount = baseAmount,
             paidByPhone = paidByPhone,
             category = expense.category,
             createdAt = now,
@@ -129,6 +145,12 @@ class ExpenseRepository(
 
     fun getExpensesForGroup(groupId: String): Flow<List<ExpenseEntity>> =
         expenseDao.getExpensesForGroup(groupId)
+
+    fun getAllExpenses(): Flow<List<ExpenseEntity>> =
+        expenseDao.getAllExpenses()
+
+    fun getGroupTotalExpense(groupId: String): Flow<Double> =
+        expenseDao.getGroupTotalExpense(groupId)
 
     fun getSplitsForExpense(expenseId: String): Flow<List<ExpenseSplitEntity>> =
         expenseDao.getSplitsForExpense(expenseId)
@@ -150,6 +172,9 @@ class ExpenseRepository(
                 groupId = doc.groupId,
                 title = doc.title,
                 amount = doc.amount,
+                currency = doc.currency,
+                exchangeRateToBase = doc.exchangeRateToBase,
+                baseAmount = if (doc.baseAmount > 0.0) doc.baseAmount else (doc.amount * doc.exchangeRateToBase),
                 paidByPhone = doc.paidByPhone,
                 category = doc.category.takeIf { it.isNotBlank() } ?: "Other",
                 createdAt = doc.createdAt
@@ -185,7 +210,7 @@ class ExpenseRepository(
 
         for (expense in expenses) {
             balances[expense.paidByPhone] =
-                (balances[expense.paidByPhone] ?: 0.0) + expense.amount
+                (balances[expense.paidByPhone] ?: 0.0) + expense.baseAmount
         }
 
         for (split in splits) {
@@ -278,6 +303,9 @@ class ExpenseRepository(
     fun getSettlementsForGroup(groupId: String): Flow<List<SettlementRecordEntity>>? =
         settlementDao?.getSettlementsForGroup(groupId)
 
+    fun getSettlementsForUser(phone: String): Flow<List<SettlementRecordEntity>>? =
+        settlementDao?.getSettlementsForUser(phone)
+
     // ──────────────────────────────────────────────
     //  PERSONAL EXPENSE MIRROR
     // ──────────────────────────────────────────────
@@ -287,10 +315,18 @@ class ExpenseRepository(
         splits: List<ExpenseSplitEntity>
     ) {
         splits.forEach { split ->
+            val shareInOriginal = if (expense.exchangeRateToBase > 0.0) {
+                split.shareAmount / expense.exchangeRateToBase
+            } else {
+                split.shareAmount
+            }
             val personal = PersonalExpenseEntity(
                 id = UUID.randomUUID().toString(),
                 userPhone = split.memberPhone,
-                amount = split.shareAmount,
+                amount = shareInOriginal,
+                currency = expense.currency,
+                exchangeRateToBase = expense.exchangeRateToBase,
+                baseAmount = split.shareAmount,
                 category = expense.category,
                 source = "GROUP",
                 sourceExpenseId = expense.id,

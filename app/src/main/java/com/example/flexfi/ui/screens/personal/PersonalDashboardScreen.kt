@@ -18,6 +18,7 @@ import com.example.flexfi.data.local.entities.PersonalExpenseEntity
 import com.example.flexfi.ui.components.*
 import com.example.flexfi.ui.theme.*
 import com.example.flexfi.utils.CurrencyProvider
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,11 +30,23 @@ fun PersonalDashboardScreen(
 ) {
     val expenses by viewModel.expenses.collectAsState()
     val totalSpent by viewModel.totalSpent.collectAsState()
+    val budgetProgress by viewModel.budgetProgress.collectAsState()
 
-    val categoryTotals = remember(expenses) {
-        expenses
+    val currentMonthExpenses = remember(expenses) {
+        val now = Calendar.getInstance()
+        val month = now.get(Calendar.MONTH)
+        val year = now.get(Calendar.YEAR)
+        expenses.filter { expense ->
+            if (expense.type != "EXPENSE") return@filter false
+            val expenseCal = Calendar.getInstance().apply { timeInMillis = expense.createdAt }
+            expenseCal.get(Calendar.MONTH) == month && expenseCal.get(Calendar.YEAR) == year
+        }
+    }
+
+    val categoryTotals = remember(currentMonthExpenses) {
+        currentMonthExpenses
             .groupBy { it.category }
-            .mapValues { (_, items) -> items.sumOf { it.amount } }
+            .mapValues { (_, items) -> items.sumOf { it.baseAmount } }
             .entries
             .sortedByDescending { it.value }
             .associate { it.key to it.value }
@@ -42,17 +55,12 @@ fun PersonalDashboardScreen(
     val maxCategory = categoryTotals.values.maxOrNull() ?: 1.0
 
     Scaffold(
-        containerColor = FlexFiGreySurface,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             FlexFiTopBar(
                 title = "Your Spending",
                 showBackButton = true,
-                onBackClick = onBack,
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Default.Notifications, "Notifications", tint = FlexFiDarkText)
-                    }
-                }
+                onBackClick = onBack
             )
         },
         floatingActionButton = {
@@ -97,16 +105,57 @@ fun PersonalDashboardScreen(
                 }
             }
 
-            // Category Breakdown
-            if (categoryTotals.isNotEmpty()) {
+            // Budget vs Actuals (or fallback to Category Breakdown)
+            if (budgetProgress.isNotEmpty()) {
                 item {
-                    Text("Category Breakdown", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                    Text("Budget vs Actuals", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 }
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = FlexFiWhite)
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            budgetProgress.forEach { progress ->
+                                val icon = when (progress.category.lowercase()) {
+                                    "food" -> Icons.Default.Restaurant
+                                    "transport" -> Icons.Default.DirectionsCar
+                                    "shopping" -> Icons.Default.ShoppingBag
+                                    "entertainment" -> Icons.Default.SportsEsports
+                                    "health" -> Icons.Default.LocalHospital
+                                    "utilities" -> Icons.Default.Bolt
+                                    "rent" -> Icons.Default.Home
+                                    else -> Icons.Default.MoreHoriz
+                                }
+                                val color = when {
+                                    progress.isOverBudget -> FlexFiRed
+                                    progress.isWarning -> FlexFiOrange
+                                    else -> FlexFiGreen
+                                }
+                                val amountStr = "${CurrencyProvider.formatAmount(progress.spentBase)} / ${CurrencyProvider.formatAmount(progress.limitBase)}"
+                                
+                                FlexFiCategoryProgressBar(
+                                    icon = icon,
+                                    iconTint = color,
+                                    label = progress.category,
+                                    amount = amountStr,
+                                    progress = progress.percentage,
+                                    progressColor = color
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (categoryTotals.isNotEmpty()) {
+                item {
+                    Text("Category Breakdown", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                }
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             categoryTotals.entries.forEach { (cat, amount) ->
@@ -152,15 +201,7 @@ fun PersonalDashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Recent Activity", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
-                        Row {
-                            IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.FilterList, null, tint = FlexFiBodyText, modifier = Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = {}, modifier = Modifier.size(32.dp)) {
-                                Icon(Icons.Default.Search, null, tint = FlexFiBodyText, modifier = Modifier.size(18.dp))
-                            }
-                        }
+                        Text("Recent Activity", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 items(expenses) { expense ->
@@ -168,18 +209,30 @@ fun PersonalDashboardScreen(
                         "food" -> Icons.Default.Restaurant
                         "transport" -> Icons.Default.DirectionsCar
                         "shopping" -> Icons.Default.ShoppingBag
+                        "entertainment" -> Icons.Default.Movie
+                        "health" -> Icons.Default.MedicalServices
+                        "utilities" -> Icons.Default.ElectricalServices
+                        "rent" -> Icons.Default.Home
                         else -> Icons.Default.Receipt
                     }
                     val iconColor = when (expense.category.lowercase()) {
                         "food" -> CategoryFood
                         "transport" -> CategoryTransport
                         "shopping" -> CategoryShopping
+                        "entertainment" -> CategoryEntertainment
+                        "health" -> CategoryHealth
+                        "utilities" -> CategoryUtilities
+                        "rent" -> CategoryRent
                         else -> CategoryOther
                     }
                     FlexFiExpenseCard(
                         title = expense.description ?: "Expense",
                         subtitle = "${expense.category} • ${if (expense.source == "GROUP") "Group" else "Personal"}",
-                        amount = CurrencyProvider.formatAmount(expense.amount),
+                        amount = CurrencyProvider.formatTransactionAmount(
+                            amount = expense.amount,
+                            currency = expense.currency,
+                            baseAmount = expense.baseAmount
+                        ),
                         icon = icon,
                         iconBgColor = iconColor.copy(alpha = 0.15f),
                         iconTint = iconColor,

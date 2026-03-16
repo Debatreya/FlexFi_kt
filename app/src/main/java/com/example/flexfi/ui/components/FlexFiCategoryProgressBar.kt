@@ -14,9 +14,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.flexfi.ui.theme.FlexFiBodyText
-import com.example.flexfi.ui.theme.FlexFiDarkText
-import com.example.flexfi.ui.theme.FlexFiGreySurface
+import androidx.compose.material3.MaterialTheme
 
 @Composable
 fun FlexFiCategoryProgressBar(
@@ -48,14 +46,14 @@ fun FlexFiCategoryProgressBar(
                 text = label,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = FlexFiDarkText,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = amount,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = FlexFiDarkText
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -64,7 +62,7 @@ fun FlexFiCategoryProgressBar(
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp))
-                .background(FlexFiGreySurface)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(
                 modifier = Modifier

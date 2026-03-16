@@ -7,6 +7,7 @@ import com.example.flexfi.data.local.entities.ContactEntity
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.repository.ContactRepository
+import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 class GroupViewModel(
     private val groupRepository: GroupRepository,
     private val contactRepository: ContactRepository,
+    private val expenseRepository: ExpenseRepository,
     private val authService: FirebaseAuthService
 ) : ViewModel() {
 
@@ -46,19 +48,30 @@ class GroupViewModel(
         }
     }
 
-    fun createGroup(name: String, selectedContacts: List<ContactEntity>) {
+    fun createGroup(
+        name: String,
+        selectedContacts: List<ContactEntity>,
+        onComplete: () -> Unit = {}
+    ) {
         val phone = authService.getCurrentUser()?.phoneNumber ?: return
         viewModelScope.launch {
             val memberPhones = selectedContacts.map { it.phone }
             groupRepository.createGroup(name, phone, memberPhones)
+            onComplete()
         }
     }
 
-    fun updateGroup(groupId: String, newName: String, selectedContacts: List<ContactEntity>) {
+    fun updateGroup(
+        groupId: String,
+        newName: String,
+        selectedContacts: List<ContactEntity>,
+        onComplete: () -> Unit = {}
+    ) {
         val phone = authService.getCurrentUser()?.phoneNumber ?: return
         viewModelScope.launch {
             val memberPhones = selectedContacts.map { it.phone }
             groupRepository.updateGroup(groupId, newName, phone, memberPhones)
+            onComplete()
         }
     }
 
@@ -71,6 +84,15 @@ class GroupViewModel(
     fun getGroupMembers(groupId: String): Flow<List<GroupMemberInfo>> = 
         groupRepository.getGroupMembers(groupId)
 
+    suspend fun getMemberCount(groupId: String): Int =
+        groupRepository.getMemberCount(groupId)
+
+    suspend fun getGroupMembersOnce(groupId: String): List<GroupMemberInfo> =
+        groupRepository.getGroupMembersOnce(groupId)
+
     suspend fun getGroupById(groupId: String): GroupEntity? = 
         groupRepository.getGroupById(groupId)
+
+    fun getGroupTotalExpense(groupId: String): Flow<Double> =
+        expenseRepository.getGroupTotalExpense(groupId)
 }

@@ -1,7 +1,7 @@
 package com.example.flexfi.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Brush
@@ -32,6 +32,24 @@ private val FlexFiColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFEEEEEE)
 )
 
+private val FlexFiDarkColorScheme = darkColorScheme(
+    primary = FlexFiBlue,
+    onPrimary = FlexFiWhite,
+    secondary = FlexFiTeal,
+    onSecondary = FlexFiWhite,
+    tertiary = FlexFiPurple,
+    onTertiary = FlexFiWhite,
+    background = Color(0xFF0F1216),
+    onBackground = Color(0xFFE6EDF3),
+    surface = Color(0xFF161B22),
+    onSurface = Color(0xFFE6EDF3),
+    surfaceVariant = Color(0xFF1F2630),
+    onSurfaceVariant = Color(0xFFA8B3C1),
+    error = FlexFiRed,
+    onError = FlexFiWhite,
+    outline = Color(0xFF39424E)
+)
+
 /** Reusable gradient brushes used across the app. */
 object FlexFiGradients {
     val primary = Brush.horizontalGradient(listOf(FlexFiBlue, FlexFiTeal))
@@ -44,10 +62,11 @@ object FlexFiGradients {
 
 @Composable
 fun FlexFiTheme(
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
-        colorScheme = FlexFiColorScheme,
+        colorScheme = if (darkTheme) FlexFiDarkColorScheme else FlexFiColorScheme,
         typography = FlexFiTypography,
         content = content
     )

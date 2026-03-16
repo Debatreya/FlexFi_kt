@@ -24,7 +24,7 @@ fun FlexFiBalanceStatCard(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -34,7 +34,7 @@ fun FlexFiBalanceStatCard(
                 text = title,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = FlexFiBodyText,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 letterSpacing = 0.5.sp
             )
             Spacer(Modifier.height(6.dp))
@@ -50,7 +50,7 @@ fun FlexFiBalanceStatCard(
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(FlexFiGreySurface)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Box(
                     modifier = Modifier

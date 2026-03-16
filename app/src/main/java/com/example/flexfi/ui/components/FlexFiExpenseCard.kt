@@ -30,7 +30,7 @@ fun FlexFiExpenseCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         onClick = onClick
     ) {
@@ -65,14 +65,14 @@ fun FlexFiExpenseCard(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = FlexFiDarkText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
-                    color = FlexFiBodyText,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
             }
@@ -83,7 +83,7 @@ fun FlexFiExpenseCard(
                     text = amount,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = FlexFiDarkText
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (statusText != null) {
                     Spacer(Modifier.height(2.dp))

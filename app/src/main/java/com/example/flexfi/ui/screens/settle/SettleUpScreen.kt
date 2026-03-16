@@ -35,6 +35,8 @@ fun SettleUpScreen(
     var showPayDialog by remember { mutableStateOf(false) }
     var selectedDebt by remember { mutableStateOf<SettleUpDebt?>(null) }
     var payAmount by remember { mutableStateOf("") }
+    var payCurrency by remember { mutableStateOf(CurrencyProvider.displayCurrencyCode) }
+    var currencyExpanded by remember { mutableStateOf(false) }
 
     // Pay dialog
     if (showPayDialog && selectedDebt != null) {
@@ -61,8 +63,36 @@ fun SettleUpScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        prefix = { Text(CurrencyProvider.symbol) }
+                        prefix = { Text(payCurrency) }
                     )
+                    Spacer(Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = currencyExpanded,
+                        onExpandedChange = { currencyExpanded = !currencyExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = payCurrency,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            label = { Text("Payment Currency") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = currencyExpanded) }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = currencyExpanded,
+                            onDismissRequest = { currencyExpanded = false }
+                        ) {
+                            CurrencyProvider.supportedCurrencyCodes.forEach { code ->
+                                DropdownMenuItem(
+                                    text = { Text(code) },
+                                    onClick = {
+                                        payCurrency = code
+                                        currencyExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
@@ -94,6 +124,7 @@ fun SettleUpScreen(
                     viewModel.recordPayment(
                         toPhone = selectedDebt!!.personPhone,
                         amount = amount,
+                        currency = payCurrency,
                         groupId = selectedDebt!!.groupId,
                         onSuccess = {
                             showPayDialog = false
@@ -240,17 +271,6 @@ fun SettleUpScreen(
                                             contentColor = FlexFiGreen
                                         )
                                     ) { Text("Pay", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
-                                } else {
-                                    FilledTonalButton(
-                                        onClick = { /* remind */ },
-                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                                        modifier = Modifier.height(30.dp),
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = FlexFiLightBlue,
-                                            contentColor = FlexFiBlue
-                                        )
-                                    ) { Text("Remind", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
                                 }
                             }
                         }
@@ -270,6 +290,7 @@ fun SettleUpScreen(
                                 viewModel.recordPayment(
                                     toPhone = debt.personPhone,
                                     amount = debt.amount,
+                                    currency = CurrencyProvider.displayCurrencyCode,
                                     groupId = debt.groupId,
                                     onSuccess = {},
                                     onError = {}

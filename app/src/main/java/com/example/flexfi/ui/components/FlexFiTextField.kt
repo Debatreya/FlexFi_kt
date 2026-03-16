@@ -8,9 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.example.flexfi.ui.theme.FlexFiGreyBorder
-import com.example.flexfi.ui.theme.FlexFiGreySurface
-import com.example.flexfi.ui.theme.FlexFiBodyText
+
 
 @Composable
 fun FlexFiTextField(
@@ -32,9 +30,9 @@ fun FlexFiTextField(
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         label = if (label.isNotEmpty()) {{ Text(label) }} else null,
-        placeholder = if (placeholder.isNotEmpty()) {{ Text(placeholder, color = FlexFiBodyText) }} else null,
+        placeholder = if (placeholder.isNotEmpty()) {{ Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant) }} else null,
         leadingIcon = if (leadingIcon != null) {{
-            Icon(leadingIcon, contentDescription = null, tint = FlexFiBodyText)
+            Icon(leadingIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }} else null,
         trailingIcon = trailingIcon,
         singleLine = singleLine,
@@ -44,9 +42,9 @@ fun FlexFiTextField(
         keyboardOptions = keyboardOptions,
         shape = RoundedCornerShape(12.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = FlexFiGreyBorder,
-            unfocusedContainerColor = FlexFiGreySurface,
-            focusedContainerColor = FlexFiGreySurface
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     )
 }
