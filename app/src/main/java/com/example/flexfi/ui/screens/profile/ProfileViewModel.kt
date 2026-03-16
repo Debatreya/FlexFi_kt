@@ -88,23 +88,41 @@ class ProfileViewModel(
     }
 
     fun updateMonthlyIncomeInDisplayCurrency(amountInDisplay: Double) {
-        val baseAmount = CurrencyProvider.convertToBase(amountInDisplay)
-        saveSettings(_state.value.settings.copy(monthlyIncome = baseAmount))
+        viewModelScope.launch {
+            syncDisplayRateForSettings()
+            val baseAmount = CurrencyProvider.convertToBase(amountInDisplay)
+            settingsRepository.saveSettings(_state.value.settings.copy(monthlyIncome = baseAmount))
+        }
     }
 
     fun updateBankBalanceInDisplayCurrency(amountInDisplay: Double) {
-        val baseAmount = CurrencyProvider.convertToBase(amountInDisplay)
-        saveSettings(_state.value.settings.copy(currentBankBalance = baseAmount))
+        viewModelScope.launch {
+            syncDisplayRateForSettings()
+            val baseAmount = CurrencyProvider.convertToBase(amountInDisplay)
+            settingsRepository.saveSettings(_state.value.settings.copy(currentBankBalance = baseAmount))
+        }
     }
 
     /** Saves both income and balance in a single write to avoid race conditions. */
     fun saveFinancialSettings(incomeInDisplay: Double, balanceInDisplay: Double) {
-        val baseIncome = CurrencyProvider.convertToBase(incomeInDisplay)
-        val baseBalance = CurrencyProvider.convertToBase(balanceInDisplay)
-        saveSettings(_state.value.settings.copy(
-            monthlyIncome = baseIncome,
-            currentBankBalance = baseBalance
-        ))
+        viewModelScope.launch {
+            syncDisplayRateForSettings()
+            val baseIncome = CurrencyProvider.convertToBase(incomeInDisplay)
+            val baseBalance = CurrencyProvider.convertToBase(balanceInDisplay)
+            settingsRepository.saveSettings(
+                _state.value.settings.copy(
+                    monthlyIncome = baseIncome,
+                    currentBankBalance = baseBalance
+                )
+            )
+        }
+    }
+
+    private suspend fun syncDisplayRateForSettings() {
+        val currencyCode = _state.value.settings.displayCurrency
+        val rate = exchangeRateApi.getRate("USD", currencyCode, System.currentTimeMillis())
+        CurrencyProvider.setDisplayCurrency(currencyCode)
+        CurrencyProvider.setDisplayRateFromBase(rate)
     }
 
     fun updateProfilePhoto(uri: String?) {

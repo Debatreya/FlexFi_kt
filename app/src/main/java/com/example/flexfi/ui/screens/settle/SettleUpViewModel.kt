@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.remote.ExchangeRateApi
 import com.example.flexfi.data.remote.FirebaseAuthService
+import com.example.flexfi.data.repository.AppSettingsRepository
 import com.example.flexfi.data.repository.ContactRepository
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
@@ -27,7 +28,8 @@ class SettleUpViewModel(
     private val groupRepository: GroupRepository,
     private val contactRepository: ContactRepository,
     private val authService: FirebaseAuthService,
-    private val exchangeRateApi: ExchangeRateApi
+    private val exchangeRateApi: ExchangeRateApi,
+    private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
     private val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: ""
@@ -101,13 +103,15 @@ class SettleUpViewModel(
         viewModelScope.launch {
             try {
                 val rateToBase = exchangeRateApi.getRate(currency, "USD", System.currentTimeMillis())
+                val baseAmount = amount * rateToBase
                 expenseRepository.recordSettlement(
                     groupId = groupId,
                     fromPhone = currentUserPhone,
                     toPhone = toPhone,
-                    amount = amount * rateToBase,
+                    amount = baseAmount,
                     note = "Settled externally"
                 )
+                appSettingsRepository.adjustCurrentBankBalance(-baseAmount)
                 loadAllDebts() // Refresh
                 onSuccess()
             } catch (e: Exception) {

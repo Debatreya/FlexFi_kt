@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.ExpenseSplitEntity
+import com.example.flexfi.data.repository.AppSettingsRepository
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.Settlement
@@ -19,7 +20,8 @@ class ExpenseViewModel(
     private val expenseRepository: ExpenseRepository,
     private val groupRepository: GroupRepository,
     private val streakRepository: StreakRepository,
-    private val authService: FirebaseAuthService
+    private val authService: FirebaseAuthService,
+    private val appSettingsRepository: AppSettingsRepository
 ) : ViewModel() {
 
     private val _expenses = MutableStateFlow<List<ExpenseEntity>>(emptyList())
@@ -75,7 +77,7 @@ class ExpenseViewModel(
     ) {
         viewModelScope.launch {
             try {
-                expenseRepository.addExpense(
+                val createdExpense = expenseRepository.addExpense(
                     title = title,
                     amount = amount,
                     currency = currency,
@@ -88,6 +90,9 @@ class ExpenseViewModel(
                 )
                 val userPhone = authService.getCurrentUser()?.phoneNumber
                 if (!userPhone.isNullOrBlank()) {
+                    if (createdExpense.paidByPhone == userPhone) {
+                        appSettingsRepository.adjustCurrentBankBalance(-createdExpense.baseAmount)
+                    }
                     streakRepository.updateStreak(userPhone)
                 }
                 onSuccess()
@@ -113,7 +118,12 @@ class ExpenseViewModel(
     ) {
         viewModelScope.launch {
             try {
+                val deletedExpense = _expenses.value.firstOrNull { it.id == expenseId }
                 expenseRepository.deleteExpense(expenseId)
+                val userPhone = authService.getCurrentUser()?.phoneNumber
+                if (!userPhone.isNullOrBlank() && deletedExpense?.paidByPhone == userPhone) {
+                    appSettingsRepository.adjustCurrentBankBalance(deletedExpense.baseAmount)
+                }
                 _expenses.value = _expenses.value.filterNot { it.id == expenseId }
                 _currentSplits.value = emptyList()
                 onSuccess()

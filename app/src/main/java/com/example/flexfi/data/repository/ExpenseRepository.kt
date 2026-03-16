@@ -45,7 +45,7 @@ class ExpenseRepository(
         splitType: String,
         selectedMemberPhones: List<String>,
         exactAmounts: Map<String, Double>? = null
-    ) {
+    ): ExpenseEntity {
         val expenseId = UUID.randomUUID().toString()
         val now = System.currentTimeMillis()
         val rateToBase = exchangeRateApi.getRate(
@@ -137,6 +137,8 @@ class ExpenseRepository(
             splits = splits.map { SplitDoc(phone = it.memberPhone, share = it.shareAmount) }
         )
         firestoreExpenseService.createExpense(expenseDoc)
+
+        return expense
     }
 
     // ──────────────────────────────────────────────

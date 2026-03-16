@@ -19,6 +19,11 @@ class AppSettingsRepository(
         appSettingsDao.updateSettings(settings)
     }
 
+    suspend fun adjustCurrentBankBalance(deltaBase: Double) {
+        val current = getSettingsOnce()
+        saveSettings(current.copy(currentBankBalance = current.currentBankBalance + deltaBase))
+    }
+
     suspend fun ensureDefaults() {
         val existing = appSettingsDao.getSettingsOnce()
         if (existing == null) {

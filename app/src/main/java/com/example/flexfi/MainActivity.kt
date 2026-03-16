@@ -159,7 +159,13 @@ fun FlexFiApp(
     )
 
     val expenseViewModel: ExpenseViewModel = viewModel(
-        factory = ExpenseViewModelFactory(expenseRepository, groupRepository, streakRepository, authService)
+        factory = ExpenseViewModelFactory(
+            expenseRepository,
+            groupRepository,
+            streakRepository,
+            authService,
+            appSettingsRepository
+        )
     )
 
     val personalExpenseViewModel: PersonalExpenseViewModel = viewModel(
@@ -167,7 +173,14 @@ fun FlexFiApp(
     )
 
     val settleUpViewModel: SettleUpViewModel = viewModel(
-        factory = SettleUpViewModelFactory(expenseRepository, groupRepository, contactRepository, authService, exchangeRateApi)
+        factory = SettleUpViewModelFactory(
+            expenseRepository,
+            groupRepository,
+            contactRepository,
+            authService,
+            exchangeRateApi,
+            appSettingsRepository
+        )
     )
 
     val budgetGoalViewModel: BudgetGoalViewModel = viewModel(
@@ -506,11 +519,18 @@ class ExpenseViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val groupRepository: GroupRepository,
     private val streakRepository: StreakRepository,
-    private val authService: FirebaseAuthService
+    private val authService: FirebaseAuthService,
+    private val appSettingsRepository: AppSettingsRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        return ExpenseViewModel(expenseRepository, groupRepository, streakRepository, authService) as T
+        return ExpenseViewModel(
+            expenseRepository,
+            groupRepository,
+            streakRepository,
+            authService,
+            appSettingsRepository
+        ) as T
     }
 }
 
@@ -532,11 +552,19 @@ class SettleUpViewModelFactory(
     private val groupRepository: GroupRepository,
     private val contactRepository: ContactRepository,
     private val authService: FirebaseAuthService,
-    private val exchangeRateApi: ExchangeRateApi
+    private val exchangeRateApi: ExchangeRateApi,
+    private val appSettingsRepository: AppSettingsRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        return SettleUpViewModel(expenseRepository, groupRepository, contactRepository, authService, exchangeRateApi) as T
+        return SettleUpViewModel(
+            expenseRepository,
+            groupRepository,
+            contactRepository,
+            authService,
+            exchangeRateApi,
+            appSettingsRepository
+        ) as T
     }
 }
 

@@ -1,8 +1,12 @@
 package com.example.flexfi.ui.screens.profile
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,7 +14,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -52,9 +59,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.flexfi.ui.theme.FlexFiGradients
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,7 +191,13 @@ fun ProfileScreen(
                         onValueChange = { monthlyIncomeInput = it },
                         label = "Monthly Income (${settings.displayCurrency})",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        leadingIcon = Icons.Default.AttachMoney
+                        leadingContent = {
+                            Text(
+                                text = CurrencyProvider.getSymbol(settings.displayCurrency),
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     )
 
                     FlexFiTextField(
@@ -185,7 +205,13 @@ fun ProfileScreen(
                         onValueChange = { bankBalanceInput = it },
                         label = "Current Bank Balance (${settings.displayCurrency})",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        leadingIcon = Icons.Default.AttachMoney
+                        leadingContent = {
+                            Text(
+                                text = CurrencyProvider.getSymbol(settings.displayCurrency),
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     )
 
                     FlexFiPrimaryButton(
@@ -234,17 +260,90 @@ fun ProfileScreen(
                 }
             }
 
-            FlexFiOutlinedButton(
-                text = "Open Your Expenses",
+            ProfileActionCard(
+                title = "Open Your Expenses",
+                subtitle = "See full transactions and categories",
+                icon = Icons.Default.ReceiptLong,
                 onClick = onOpenExpenses
             )
 
-            FlexFiOutlinedButton(
-                text = "Open Analytics & Trends",
+            ProfileActionCard(
+                title = "Open Analytics & Trends",
+                subtitle = "Track insights and monthly patterns",
+                icon = Icons.Default.BarChart,
                 onClick = onOpenAnalytics
             )
 
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun ProfileActionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(brush = FlexFiGradients.button),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = FlexFiWhite, modifier = Modifier.size(18.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

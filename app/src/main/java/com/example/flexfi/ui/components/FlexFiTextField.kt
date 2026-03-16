@@ -18,6 +18,7 @@ fun FlexFiTextField(
     label: String = "",
     placeholder: String = "",
     leadingIcon: ImageVector? = null,
+    leadingContent: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
     singleLine: Boolean = true,
     readOnly: Boolean = false,
@@ -31,9 +32,15 @@ fun FlexFiTextField(
         modifier = modifier.fillMaxWidth(),
         label = if (label.isNotEmpty()) {{ Text(label) }} else null,
         placeholder = if (placeholder.isNotEmpty()) {{ Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant) }} else null,
-        leadingIcon = if (leadingIcon != null) {{
-            Icon(leadingIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }} else null,
+        leadingIcon = when {
+            leadingContent != null -> leadingContent
+            leadingIcon != null -> {
+                {
+                    Icon(leadingIcon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            else -> null
+        },
         trailingIcon = trailingIcon,
         singleLine = singleLine,
         readOnly = readOnly,
