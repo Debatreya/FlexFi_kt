@@ -1,85 +1,84 @@
 # FlexFi Quick Help
 
-This guide is a short in-app reference for daily use.
+This is a fast in-app usage guide.
 
-## Start Here
+## First Setup
+
 1. Open Profile.
-2. Set Display Currency, Monthly Income, and Current Bank Balance.
-3. Tap Save Financial Settings.
+2. Set display currency.
+3. Set monthly income and current bank balance.
+4. Tap Save Financial Settings.
 
-## Main Actions
+## Daily Actions
 
-### Add Personal Expense
+### Add Personal Transaction
+
 Path: Home -> Expenses -> Add Expense
 
-You can add:
-- Amount
-- Type (Expense/Income/Transfer)
-- Category/Sub-category
-- Date
-- Payment mode
-- Merchant
-- Tags
-- Attachment (receipt)
+Supported types:
+- Expense
+- Income
+- Transfer
 
 ### Add Group Expense
+
 Path: Home -> Groups -> Select Group -> Add Expense
 
-- Choose payer
-- Choose split type (Equal or Exact)
-- Save and review in Group Detail
+Supported splits:
+- Equal
+- Exact
 
-### Settle Dues
+### Settle Up
+
 Path: Home -> Settle Up
 
-- View who owes whom
-- Record external payment
+You can:
+- Review who you owe and who owes you
+- Record a payment
+- Use Settle All
+- Approve or reject pending incoming payments
 
-### Budgets
-Path: Profile -> Open Budgets
+### Group-Specific Settle
 
-- Set category budget
-- Set overall budget
-- Enable rollover
-- Watch warning/over-budget indicators
+Path: Groups -> Group Detail -> Settle Up
 
-### Goals
-Path: Home -> Goals
+This shows settlement data only for that group.
 
-- Create goal with target amount and target date
-- Track contributions and milestones
+### Budgets and Goals
 
-### Recurring Transactions
+- Budgets: Profile -> Open Budgets
+- Goals: Home -> Goals
+
+### Recurring
+
 Path: Profile -> Recurring Transactions
 
-- Add recurring item
-- Toggle active/inactive
-- Run Auto-Pay Now
+You can add, toggle, delete, and Run Auto-Pay Now.
 
-### Analytics
-Path: Profile -> Open Analytics & Trends
+## Profile
 
-- View monthly totals
-- Category breakdown
-- Trend visuals
+Path: Home -> Profile
+
+You can edit:
+- Name
+- Email
+- Photo
+- Display currency
+- Financial baseline values
 
 ## Quick Troubleshooting
 
-### Balance looks wrong
-1. Confirm transaction payer/type/date.
-2. Reopen Home and wait for refresh.
-3. Check Profile balance and currency.
+### Settlement looks duplicated for same person
 
-### Wrong symbol/currency
-1. Go to Profile.
-2. Update Display Currency.
-3. Save settings.
+- Ensure both entries refer to same phone contact.
+- Reopen settle page after sync.
 
-### Cannot find budgets
-Go to Profile -> Open Budgets.
+### Amount looks unexpectedly small/large
 
-## Quick Navigation Map
-- Home: Dashboard, balances, groups, recent activity
-- Groups: Shared expenses and splits
-- Expenses: Personal expense dashboard
-- Profile: Settings, recurring, analytics, budgets
+- Check selected payment currency during manual record.
+- Verify display currency in Profile.
+
+### Group settle page shows no data
+
+- Open group detail first, then Settle Up.
+- Pull data once by revisiting Home/Groups after network is available.

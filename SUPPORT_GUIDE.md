@@ -1,117 +1,87 @@
 # FlexFi Support Guide
 
-Use this guide for QA, debugging, and user support.
+Use this for QA, bug triage, and support reproduction.
 
 ## Scope
-Covers current app version behavior for:
-- Transactions
-- Balance updates
-- Budgets
-- Goals
-- Recurring
-- Analytics
+
+- Auth and profile identity
+- Personal transactions
 - Group splits and settlements
+- Settle All and pending approvals
+- Budgets, goals, recurring, analytics
+- Currency and balance integrity
 
-## Core Verification Checklist
+## Critical Regression Checks
 
-### 1. Financial Baseline
-1. Open Profile.
-2. Save Monthly Income and Current Bank Balance.
-3. Confirm values are shown on Home/Profile consistently.
+### 1. Profile identity
 
-Expected:
-- Home total balance equals Profile current bank balance (display-converted).
-
-### 2. Personal Expense Flow
-1. Add personal EXPENSE.
-2. Add personal INCOME.
-3. Edit one item.
-4. Delete one item.
+1. Sign up as a new user.
+2. Enter name in profile setup.
+3. Open Profile screen.
+4. Edit and save name.
 
 Expected:
-- Items appear in Personal Dashboard.
-- Analytics and category totals update.
+- Name appears after signup.
+- Name remains after relaunch/login.
 
-### 3. Group Expense Flow
-1. Create/add group members.
-2. Add group expense (paid by current user).
-3. Test both Equal and Exact splits.
-4. Delete one group expense.
+### 2. Settlement amount integrity
 
-Expected:
-- Group balances update.
-- Settlement suggestions update.
-- Home/Profile balance updates for payer-related cash movement.
-
-### 4. Settle Up Flow
-1. Open Settle Up.
-2. Record a payment.
+1. Create debt to a contact (example: 400.89 in display currency).
+2. Tap Settle All.
+3. Inspect pending settlement amount and post-approval behavior.
 
 Expected:
-- Debt list refreshes.
-- Balance adjusts accordingly.
+- Amount remains correct in display terms.
+- No tiny/incorrect values caused by conversion mismatch.
 
-### 5. Budget Flow
-1. Open Profile -> Open Budgets.
-2. Add category budget.
-3. Add/update OVERALL budget.
-4. Enable rollover on one category.
-5. Add expenses to exceed thresholds.
+### 3. Duplicate settle rows
+
+1. Create contact variants for same person phone formatting.
+2. Open global Settle Up.
 
 Expected:
-- Progress bars move.
-- Warning near ~80% and over-budget indicators appear.
+- A single summed row per logical person.
 
-### 6. Goal Flow
-1. Add goal with target amount/date.
-2. Add contribution.
-3. Edit goal.
+### 4. Group settle page consistency
 
-Expected:
-- Progress and milestone state update.
-
-### 7. Recurring Flow
-1. Add recurring transaction.
-2. Toggle active.
-3. Run Auto-Pay Now.
+1. Add group expense.
+2. Open Group Detail -> Settle Up.
+3. Open Home -> Settle Up.
 
 Expected:
-- New generated transaction where applicable.
-- Balance updates where applicable.
+- Group settle page is not empty when balances exist.
+- Group and global views are consistent for that group data.
 
-### 8. Analytics Flow
-1. Open analytics from Profile.
-2. Confirm monthly total, category breakdown, and trend chart.
+### 5. Pending approval lifecycle
 
-## Common Issues and Fix Checks
+1. Record payment.
+2. Verify receiver sees PENDING approval item.
+3. Accept and verify effect; repeat with reject.
 
-### Issue: Balance reverts after relaunch/rebuild
-Check:
-1. Opening balance anchor logic runs.
-2. Home reconciliation derives and syncs total from transaction ledger.
-3. Profile and Home display same base value.
+Expected:
+- Status transitions: PENDING -> COMPLETED or REJECTED.
+- Debt refreshes after action.
 
-### Issue: Group expense added but balance unchanged
-Check:
-1. Current user is actual payer.
-2. Expense saved successfully.
-3. Balance delta write path executed.
+## Standard Functional Checklist
 
-### Issue: Budget screen missing
-Check:
-1. Route exists in NavHost.
-2. Profile has Open Budgets entry.
+1. Personal add/edit/delete transaction
+2. Group expense with equal and exact split
+3. Budget creation + threshold behavior
+4. Goal creation + contribution
+5. Recurring transaction execution
+6. Analytics view integrity
 
-## Support Response Template
-1. Ask for exact path user followed.
-2. Ask whether it was personal expense, group expense, or settlement.
-3. Ask payer identity and currency selected.
-4. Ask for before/after balance screenshots (Home + Profile).
-5. Reproduce with same flow and date.
+## Triage Questions Template
 
-## Suggested Regression Suite
-- Currency switch with existing transactions
-- Save financial settings then add group expense
-- Delete group expense and verify reversal
-- Settlement record and balance update
-- Rebuild/relaunch and verify reconciliation
+1. Exact screen path used
+2. Group settle or global settle
+3. Currency selected at action time
+4. Before/after screenshots from Home, Settle Up, Profile
+5. Whether issue reproduces after app reopen
+
+## Fast Root-Cause Hints
+
+- Wrong settle amount: check conversion boundary at recording path.
+- Duplicate person row: check phone normalization/canonicalization.
+- Empty group settle page: check pre-calculation sync and groupId filtering.
+- Missing profile name: check local user sync and profile identity write path.
