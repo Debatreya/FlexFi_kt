@@ -64,12 +64,17 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.flexfi.ui.theme.FlexFiGradients
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,23 +87,34 @@ fun ProfileScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val recurring by viewModel.recurring.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
     val currentIncomeDisplay = CurrencyProvider.convertFromBase(settings.monthlyIncome)
     val currentBalanceDisplay = CurrencyProvider.convertFromBase(settings.currentBankBalance)
 
+    val context = LocalContext.current
     var currencyExpanded by remember { mutableStateOf(false) }
     var monthlyIncomeInput by remember(settings.monthlyIncome, settings.displayCurrency) {
-        mutableStateOf(String.format("%.2f", CurrencyProvider.convertFromBase(settings.monthlyIncome)))
+        mutableStateOf(String.format(Locale.US, "%.2f", CurrencyProvider.convertFromBase(settings.monthlyIncome)))
     }
     var bankBalanceInput by remember(settings.currentBankBalance, settings.displayCurrency) {
-        mutableStateOf(String.format("%.2f", CurrencyProvider.convertFromBase(settings.currentBankBalance)))
+        mutableStateOf(String.format(Locale.US, "%.2f", CurrencyProvider.convertFromBase(settings.currentBankBalance)))
     }
 
     var showAddRecurring by remember { mutableStateOf(false) }
+    var nameInput by remember(currentUser?.name) { mutableStateOf(currentUser?.name.orEmpty()) }
+    var emailInput by remember(currentUser?.email) { mutableStateOf(currentUser?.email.orEmpty()) }
 
     val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        viewModel.updateProfilePhoto(uri?.toString())
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            viewModel.updateProfilePhoto(uri.toString())
+            Toast.makeText(context, "Profile photo updated", Toast.LENGTH_SHORT).show()
+        }
     }
 
     if (showAddRecurring) {
@@ -137,12 +153,43 @@ fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        FlexFiAvatar(name = "You", imageUrl = settings.profilePhotoUri)
+                        FlexFiAvatar(name = currentUser?.name ?: "You", imageUrl = settings.profilePhotoUri)
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { photoPicker.launch("image/*") }) {
+                        TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
                             Text("Change Photo")
                         }
                     }
+
+                    FlexFiTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = "Name",
+                        leadingIcon = Icons.Default.Person
+                    )
+
+                    FlexFiTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it },
+                        label = "Email",
+                        leadingIcon = Icons.Default.Email,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    )
+
+                    FlexFiOutlinedButton(
+                        text = "Save Profile",
+                        onClick = {
+                            viewModel.updateProfileIdentity(
+                                name = nameInput,
+                                email = emailInput,
+                                onSuccess = {
+                                    Toast.makeText(context, "Profile updated", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { message ->
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -222,6 +269,7 @@ fun ProfileScreen(
                             val income = monthlyIncomeInput.toDoubleOrNull() ?: currentIncomeDisplay
                             val balance = bankBalanceInput.toDoubleOrNull() ?: currentBalanceDisplay
                             viewModel.saveFinancialSettings(income, balance)
+                            Toast.makeText(context, "Financial details saved", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

@@ -4,11 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.flexfi.data.local.entities.AppSettingsEntity
 import com.example.flexfi.data.local.entities.RecurringTransactionEntity
+import com.example.flexfi.data.local.entities.UserEntity
 import com.example.flexfi.data.remote.ExchangeRateApi
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.repository.AppSettingsRepository
 import com.example.flexfi.data.repository.PersonalExpenseRepository
 import com.example.flexfi.data.repository.RecurringTransactionRepository
+import com.example.flexfi.data.repository.UserRepository
 import com.example.flexfi.utils.CurrencyProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,8 @@ class ProfileViewModel(
     private val settingsRepository: AppSettingsRepository,
     private val recurringRepository: RecurringTransactionRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
-    private val exchangeRateApi: ExchangeRateApi
+    private val exchangeRateApi: ExchangeRateApi,
+    private val userRepository: UserRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileState())
@@ -36,13 +39,25 @@ class ProfileViewModel(
     private val _recurringFlow = MutableStateFlow<List<RecurringTransactionEntity>>(emptyList())
     val recurring: StateFlow<List<RecurringTransactionEntity>> = _recurringFlow.asStateFlow()
 
+    private val _currentUser = MutableStateFlow<UserEntity?>(null)
+    val currentUser: StateFlow<UserEntity?> = _currentUser.asStateFlow()
+
     init {
         viewModelScope.launch {
             settingsRepository.ensureDefaults()
             observeSettings()
             observeRecurring()
+            observeCurrentUser()
             processDueRecurringTransactions()
             refreshDisplayRate()
+        }
+    }
+
+    private fun observeCurrentUser() {
+        viewModelScope.launch {
+            userRepository.getCurrentUserFlow().collect {
+                _currentUser.value = it
+            }
         }
     }
 
@@ -129,6 +144,27 @@ class ProfileViewModel(
 
     fun updateProfilePhoto(uri: String?) {
         saveSettings(_state.value.settings.copy(profilePhotoUri = uri))
+    }
+
+    fun updateProfileIdentity(
+        name: String,
+        email: String?,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val trimmedName = name.trim()
+                if (trimmedName.isBlank()) {
+                    onError("Name cannot be empty")
+                    return@launch
+                }
+                userRepository.updateCurrentUserProfile(trimmedName, email)
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to update profile")
+            }
+        }
     }
 
     private fun saveSettings(settings: AppSettingsEntity) {

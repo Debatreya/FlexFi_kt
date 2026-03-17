@@ -25,11 +25,17 @@ import com.example.flexfi.utils.CurrencyProvider
 @Composable
 fun SettleUpScreen(
     viewModel: SettleUpViewModel,
+    groupId: String? = null,
     onBack: () -> Unit
 ) {
+    LaunchedEffect(groupId) {
+        viewModel.loadAllDebts(groupId)
+    }
+
     val debts by viewModel.debts.collectAsState()
     val totalYouOwe by viewModel.totalYouOwe.collectAsState()
     val totalOwedToYou by viewModel.totalOwedToYou.collectAsState()
+    val pendingPayments by viewModel.pendingPayments.collectAsState()
     val context = LocalContext.current
 
     var showPayDialog by remember { mutableStateOf(false) }
@@ -51,7 +57,7 @@ fun SettleUpScreen(
                         color = FlexFiBodyText
                     )
                     Text(
-                        "Total owed: ${CurrencyProvider.formatAmount(selectedDebt!!.amount)}",
+                        "Total owed: ${CurrencyProvider.formatAmount(selectedDebt!!.amountBase)}",
                         fontSize = 12.sp,
                         color = FlexFiLightText
                     )
@@ -96,12 +102,12 @@ fun SettleUpScreen(
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(
-                            onClick = { payAmount = "%.2f".format(selectedDebt!!.amount) },
+                            onClick = { payAmount = "%.2f".format(CurrencyProvider.convertFromBase(selectedDebt!!.amountBase)) },
                             label = { Text("Full Amount") },
                             shape = RoundedCornerShape(8.dp)
                         )
                         AssistChip(
-                            onClick = { payAmount = "%.2f".format(selectedDebt!!.amount / 2) },
+                            onClick = { payAmount = "%.2f".format(CurrencyProvider.convertFromBase(selectedDebt!!.amountBase / 2.0)) },
                             label = { Text("Half") },
                             shape = RoundedCornerShape(8.dp)
                         )
@@ -200,6 +206,78 @@ fun SettleUpScreen(
                 }
             }
 
+            // Pending payments section
+            if (pendingPayments.isNotEmpty()) {
+                item {
+                    Text("Pending Approvals", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = FlexFiDarkText)
+                }
+                items(pendingPayments) { payment ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = FlexFiWhite),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FlexFiAvatar(name = payment.otherName, size = AvatarSize.MEDIUM)
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(payment.otherName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = FlexFiDarkText)
+                                Text(
+                                    if (payment.isIncoming) "Paid you" else "You paid them",
+                                    fontSize = 12.sp,
+                                    color = FlexFiBodyText
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    CurrencyProvider.formatAmount(payment.amount),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (payment.isIncoming) FlexFiGreen else FlexFiBodyText
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                if (payment.isIncoming) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        TextButton(
+                                            onClick = { viewModel.rejectPayment(payment.id) },
+                                            modifier = Modifier.height(30.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                        ) { Text("Reject", fontSize = 12.sp, color = FlexFiRed) }
+                                        FilledTonalButton(
+                                            onClick = { viewModel.acceptPayment(payment.id) },
+                                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(30.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = FlexFiGreenLight,
+                                                contentColor = FlexFiGreen
+                                            )
+                                        ) { Text("Accept", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
+                                    }
+                                } else {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = FlexFiLightBlue.copy(alpha = 0.5f)
+                                    ) {
+                                        Text(
+                                            "Pending",
+                                            fontSize = 11.sp,
+                                            color = FlexFiBlue,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(8.dp)) }
+            }
+
             // Section header
             item {
                 Row(
@@ -250,7 +328,7 @@ fun SettleUpScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    CurrencyProvider.formatAmount(debt.amount),
+                                    CurrencyProvider.formatAmount(debt.amountBase),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (debt.youOwe) FlexFiRed else FlexFiGreen
@@ -260,7 +338,7 @@ fun SettleUpScreen(
                                     FilledTonalButton(
                                         onClick = {
                                             selectedDebt = debt
-                                            payAmount = "%.2f".format(debt.amount)
+                                            payAmount = "%.2f".format(CurrencyProvider.convertFromBase(debt.amountBase))
                                             showPayDialog = true
                                         },
                                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
@@ -287,10 +365,9 @@ fun SettleUpScreen(
                         onClick = {
                             // Record all debts
                             debts.filter { it.youOwe }.forEach { debt ->
-                                viewModel.recordPayment(
+                                viewModel.recordPaymentInBase(
                                     toPhone = debt.personPhone,
-                                    amount = debt.amount,
-                                    currency = CurrencyProvider.displayCurrencyCode,
+                                    amountBase = debt.amountBase,
                                     groupId = debt.groupId,
                                     onSuccess = {},
                                     onError = {}

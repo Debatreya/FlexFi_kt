@@ -14,6 +14,8 @@ class UserRepository(
     
     fun getCurrentUserFlow(): Flow<UserEntity?> = userDao.getCurrentUserFlow()
 
+    suspend fun getCurrentUserOnce(): UserEntity? = userDao.getCurrentUserFlowOnce()
+
     suspend fun getUser(id: String) = userDao.getUser(id)
 
     suspend fun syncUser(uid: String) {
@@ -43,5 +45,17 @@ class UserRepository(
             totalExpense = user.totalExpense
         )
         firestoreService.createUser(doc)
+    }
+
+    suspend fun updateCurrentUserProfile(name: String, email: String?) {
+        val current = userDao.getCurrentUserFlowOnce() ?: return
+        val normalizedEmail = email?.trim()?.takeIf { it.isNotBlank() }
+
+        val updated = current.copy(
+            name = name.trim(),
+            email = normalizedEmail
+        )
+        userDao.insertUser(updated)
+        firestoreService.updateUserProfile(current.id, updated.name, updated.email)
     }
 }

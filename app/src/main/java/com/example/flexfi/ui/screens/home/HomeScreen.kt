@@ -237,8 +237,8 @@ fun HomeScreen(
                         }
                     }
                 }
-                items(recentActivity.take(5)) { expense ->
-                    val icon = when (expense.category.lowercase()) {
+                items(recentActivity.take(5)) { activity ->
+                    val icon = when (activity.category.lowercase()) {
                         "food" -> Icons.Default.Restaurant
                         "transport" -> Icons.Default.DirectionsCar
                         "shopping" -> Icons.Default.ShoppingBag
@@ -246,9 +246,10 @@ fun HomeScreen(
                         "health" -> Icons.Default.LocalHospital
                         "utilities" -> Icons.Default.Bolt
                         "rent" -> Icons.Default.Home
+                        "transfer" -> Icons.Default.SyncAlt
                         else -> Icons.Default.Receipt
                     }
-                    val iconColor = when (expense.category.lowercase()) {
+                    val iconColor = when (activity.category.lowercase()) {
                         "food" -> CategoryFood
                         "transport" -> CategoryTransport
                         "shopping" -> CategoryShopping
@@ -256,15 +257,16 @@ fun HomeScreen(
                         "health" -> CategoryHealth
                         "utilities" -> CategoryUtilities
                         "rent" -> CategoryRent
+                        "transfer" -> FlexFiBlue
                         else -> CategoryOther
                     }
                     FlexFiExpenseCard(
-                        title = expense.description ?: "Expense",
-                        subtitle = expense.category + " • " + (if (expense.source == "GROUP") "Group" else "Personal"),
+                        title = activity.title,
+                        subtitle = activity.subtitle,
                         amount = CurrencyProvider.formatTransactionAmount(
-                            amount = expense.amount,
-                            currency = expense.currency,
-                            baseAmount = expense.baseAmount
+                            amount = activity.amount,
+                            currency = activity.currency,
+                            baseAmount = activity.baseAmount
                         ),
                         icon = icon,
                         iconBgColor = iconColor.copy(alpha = 0.15f),

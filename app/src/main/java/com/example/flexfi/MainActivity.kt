@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         val firestoreService = FirestoreUserService()
         val firestoreGroupService = FirestoreGroupService()
         val firestoreExpenseService = FirestoreExpenseService()
+        val firestoreSettlementService = com.example.flexfi.data.remote.FirestoreSettlementService()
         val exchangeRateApi = ExchangeRateApi()
         val authService = FirebaseAuthService()
         val userRepository = UserRepository(db.userDao(), firestoreService)
@@ -71,7 +72,8 @@ class MainActivity : ComponentActivity() {
             firestoreExpenseService,
             db.personalExpenseDao(),
             exchangeRateApi,
-            db.settlementDao()
+            db.settlementDao(),
+            firestoreSettlementService
         )
         val budgetGoalRepository = BudgetGoalRepository(db.budgetGoalDao())
         val budgetRepository = BudgetRepository(db.budgetDao())
@@ -139,7 +141,7 @@ fun FlexFiApp(
     val navController = rememberNavController()
 
     val homeViewModel: HomeViewModel = viewModel(
-        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository)
+        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository, contactRepository)
     )
 
     val authViewModel: AuthViewModel = viewModel(
@@ -151,7 +153,7 @@ fun FlexFiApp(
     )
 
     val contactViewModel: ContactViewModel = viewModel(
-        factory = ContactViewModelFactory(contactRepository, authService)
+        factory = ContactViewModelFactory(contactRepository, expenseRepository, exchangeRateApi, authService)
     )
 
     val groupViewModel: GroupViewModel = viewModel(
@@ -193,7 +195,8 @@ fun FlexFiApp(
             appSettingsRepository,
             recurringTransactionRepository,
             personalExpenseRepository,
-            exchangeRateApi
+            exchangeRateApi,
+            userRepository
         )
     )
 
@@ -260,7 +263,7 @@ fun FlexFiApp(
                     onPersonalExpensesClick = { navController.navigate("personal_dashboard") },
                     onSettleUpClick = { navController.navigate("settle_up") },
                     onBudgetGoalsClick = { navController.navigate("budget_goals") },
-                    onAddExpenseClick = { navController.navigate("groups") }
+                    onAddExpenseClick = { navController.navigate("add_personal_expense") }
                 )
             }
             composable("contacts") {
@@ -274,7 +277,17 @@ fun FlexFiApp(
                     onGroupsTab = { navController.navigate("groups") },
                     onHomeTab = { navController.navigate("home") { popUpTo("home") { inclusive = true } } },
                     onExpensesTab = { navController.navigate("personal_dashboard") },
-                    onProfileTab = { navController.navigate("profile") }
+                    onProfileTab = { navController.navigate("profile") },
+                    onSendMoney = { contact, amount, currency, note, onSuccess, onError ->
+                        contactViewModel.recordDirectPayment(
+                            toPhone = contact.phone,
+                            amount = amount,
+                            currency = currency,
+                            note = note,
+                            onSuccess = onSuccess,
+                            onError = onError
+                        )
+                    }
                 )
             }
             composable("add_contact") {
@@ -315,7 +328,8 @@ fun FlexFiApp(
                     onEditClick = { id -> navController.navigate("edit_group/$id") },
                     onDeleteSuccess = { navController.popBackStack() },
                     onAddExpenseClick = { id -> navController.navigate("add_expense/$id") },
-                    onExpenseClick = { id -> navController.navigate("expense_detail/$id") }
+                    onExpenseClick = { id -> navController.navigate("expense_detail/$id") },
+                    onSettleUpClick = { navController.navigate("settle_up?groupId=$groupId") }
                 )
             }
             composable(
@@ -363,7 +377,11 @@ fun FlexFiApp(
                     onAddExpenseClick = { navController.navigate("add_personal_expense") },
                     onExpenseClick = { expense ->
                         navController.navigate("edit_personal_expense/${expense.id}")
-                    }
+                    },
+                    onHomeClick = { navController.navigate("home") { popUpTo("home") { inclusive = true } } },
+                    onContactsClick = { navController.navigate("contacts") },
+                    onGroupsClick = { navController.navigate("groups") },
+                    onProfileClick = { navController.navigate("profile") }
                 )
             }
             composable("profile") {
@@ -406,9 +424,14 @@ fun FlexFiApp(
                 )
             }
             // ── New Routes: Settle Up & Budget Goals ──
-            composable("settle_up") {
+            composable(
+                route = "settle_up?groupId={groupId}",
+                arguments = listOf(navArgument("groupId") { type = NavType.StringType; nullable = true; defaultValue = null })
+            ) { backStackEntry ->
+                val groupId = backStackEntry.arguments?.getString("groupId")
                 SettleUpScreen(
                     viewModel = settleUpViewModel,
+                    groupId = groupId,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -462,7 +485,8 @@ class HomeViewModelFactory(
     private val expenseRepository: ExpenseRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val contactRepository: ContactRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -473,7 +497,8 @@ class HomeViewModelFactory(
             expenseRepository,
             personalExpenseRepository,
             streakRepository,
-            appSettingsRepository
+            appSettingsRepository,
+            contactRepository
         ) as T
     }
 }
@@ -502,11 +527,13 @@ class AnalyticsViewModelFactory(
 
 class ContactViewModelFactory(
     private val contactRepository: ContactRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val exchangeRateApi: ExchangeRateApi,
     private val authService: FirebaseAuthService
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-        return ContactViewModel(contactRepository, authService) as T
+        return ContactViewModel(contactRepository, expenseRepository, exchangeRateApi, authService) as T
     }
 }
 
@@ -590,7 +617,8 @@ class ProfileViewModelFactory(
     private val appSettingsRepository: AppSettingsRepository,
     private val recurringTransactionRepository: RecurringTransactionRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
-    private val exchangeRateApi: ExchangeRateApi
+    private val exchangeRateApi: ExchangeRateApi,
+    private val userRepository: UserRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -599,7 +627,8 @@ class ProfileViewModelFactory(
             settingsRepository = appSettingsRepository,
             recurringRepository = recurringTransactionRepository,
             personalExpenseRepository = personalExpenseRepository,
-            exchangeRateApi = exchangeRateApi
+            exchangeRateApi = exchangeRateApi,
+            userRepository = userRepository
         ) as T
     }
 }

@@ -26,7 +26,11 @@ fun PersonalDashboardScreen(
     viewModel: PersonalExpenseViewModel,
     onBack: () -> Unit,
     onAddExpenseClick: () -> Unit,
-    onExpenseClick: (PersonalExpenseEntity) -> Unit
+    onExpenseClick: (PersonalExpenseEntity) -> Unit,
+    onContactsClick: () -> Unit,
+    onGroupsClick: () -> Unit,
+    onHomeClick: () -> Unit,
+    onProfileClick: () -> Unit
 ) {
     val expenses by viewModel.expenses.collectAsState()
     val totalSpent by viewModel.totalSpent.collectAsState()
@@ -61,6 +65,20 @@ fun PersonalDashboardScreen(
                 title = "Your Spending",
                 showBackButton = true,
                 onBackClick = onBack
+            )
+        },
+        bottomBar = {
+            FlexFiBottomNavBar(
+                currentTab = BottomNavTab.EXPENSES,
+                onTabSelected = { tab ->
+                    when (tab) {
+                        BottomNavTab.HOME -> onHomeClick()
+                        BottomNavTab.GROUPS -> onGroupsClick()
+                        BottomNavTab.CONTACTS -> onContactsClick()
+                        BottomNavTab.PROFILE -> onProfileClick()
+                        else -> {}
+                    }
+                }
             )
         },
         floatingActionButton = {

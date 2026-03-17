@@ -13,14 +13,24 @@ import com.example.flexfi.data.repository.Settlement
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class SettleUpDebt(
+    val canonicalPhone: String,
     val personPhone: String,
     val personName: String,
-    val amount: Double,
+    val amountBase: Double,
     val youOwe: Boolean, // true = you owe them, false = they owe you
     val groupId: String?
+)
+
+data class PendingPaymentUI(
+    val id: String,
+    val otherPhone: String,
+    val otherName: String,
+    val amount: Double,
+    val isIncoming: Boolean // true if I am receiving, false if I am sending
 )
 
 class SettleUpViewModel(
@@ -43,52 +53,113 @@ class SettleUpViewModel(
     private val _totalOwedToYou = MutableStateFlow(0.0)
     val totalOwedToYou: StateFlow<Double> = _totalOwedToYou.asStateFlow()
 
+    private val _pendingPayments = MutableStateFlow<List<PendingPaymentUI>>(emptyList())
+    val pendingPayments: StateFlow<List<PendingPaymentUI>> = _pendingPayments.asStateFlow()
+
+    private var currentGroupIdTarget: String? = null
+
     init {
         loadAllDebts()
+        observeSettlements()
     }
 
-    fun loadAllDebts() {
+    private fun canonicalPhone(phone: String): String {
+        val trimmed = phone.trim()
+        val hasPlus = trimmed.startsWith("+")
+        val digits = trimmed.filter { it.isDigit() }
+        return if (hasPlus) "+$digits" else digits
+    }
+
+    private fun pickPreferredPhone(current: String?, candidate: String): String {
+        if (current.isNullOrBlank()) return candidate
+        if (current.startsWith("+") && !candidate.startsWith("+")) return current
+        if (!current.startsWith("+") && candidate.startsWith("+")) return candidate
+        return if (candidate.length > current.length) candidate else current
+    }
+
+    fun loadAllDebts(targetGroupId: String? = currentGroupIdTarget) {
+        currentGroupIdTarget = targetGroupId
         viewModelScope.launch {
-            val groups = groupRepository.getGroupsForUserOnce(currentUserPhone)
-            val allDebts = mutableListOf<SettleUpDebt>()
-            val contacts = contactRepository.getAllContactsOnce()
+            expenseRepository.syncSettlementsForUser(currentUserPhone)
 
-            for (group in groups) {
-                val balances = expenseRepository.calculateGroupBalances(group.id)
+            val netBalancesByPhone = mutableMapOf<String, Double>()
+            val canonicalToOriginalPhone = mutableMapOf<String, String>()
+            
+            if (targetGroupId == null) {
+                // Global view: aggregate all groups
+                val groups = groupRepository.getGroupsForUserOnce(currentUserPhone)
+                for (group in groups) {
+                    expenseRepository.syncExpensesForGroup(group.id)
+                    val balances = expenseRepository.calculateGroupBalances(group.id)
+                    val settlements = expenseRepository.calculateSettlements(balances)
+                    for (s in settlements) {
+                        if (s.fromPhone == currentUserPhone) {
+                            val key = canonicalPhone(s.toPhone)
+                            canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.toPhone)
+                            netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) - s.amount
+                        } else if (s.toPhone == currentUserPhone) {
+                            val key = canonicalPhone(s.fromPhone)
+                            canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.fromPhone)
+                            netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) + s.amount
+                        }
+                    }
+                }
+                
+                // Add direct settlements (groupId == null && status == COMPLETED)
+                val allSettlements = expenseRepository.getSettlementsForUserOnce(currentUserPhone)
+                val globalSettlements = allSettlements.filter { it.groupId == null && it.status == "COMPLETED" }
+                for (s in globalSettlements) {
+                    if (s.fromPhone == currentUserPhone) {
+                        val key = canonicalPhone(s.toPhone)
+                        canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.toPhone)
+                        netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) + s.amount
+                    } else if (s.toPhone == currentUserPhone) {
+                        val key = canonicalPhone(s.fromPhone)
+                        canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.fromPhone)
+                        netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) - s.amount
+                    }
+                }
+            } else {
+                // Group-specific view
+                expenseRepository.syncExpensesForGroup(targetGroupId)
+                val balances = expenseRepository.calculateGroupBalances(targetGroupId)
                 val settlements = expenseRepository.calculateSettlements(balances)
-
-                for (settlement in settlements) {
-                    if (settlement.fromPhone == currentUserPhone) {
-                        val name = contacts.find { it.phone == settlement.toPhone }?.name
-                            ?: settlement.toPhone
-                        allDebts.add(
-                            SettleUpDebt(
-                                personPhone = settlement.toPhone,
-                                personName = name,
-                                amount = settlement.amount,
-                                youOwe = true,
-                                groupId = group.id
-                            )
-                        )
-                    } else if (settlement.toPhone == currentUserPhone) {
-                        val name = contacts.find { it.phone == settlement.fromPhone }?.name
-                            ?: settlement.fromPhone
-                        allDebts.add(
-                            SettleUpDebt(
-                                personPhone = settlement.fromPhone,
-                                personName = name,
-                                amount = settlement.amount,
-                                youOwe = false,
-                                groupId = group.id
-                            )
-                        )
+                for (s in settlements) {
+                    if (s.fromPhone == currentUserPhone) {
+                        val key = canonicalPhone(s.toPhone)
+                        canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.toPhone)
+                        netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) - s.amount
+                    } else if (s.toPhone == currentUserPhone) {
+                        val key = canonicalPhone(s.fromPhone)
+                        canonicalToOriginalPhone[key] = pickPreferredPhone(canonicalToOriginalPhone[key], s.fromPhone)
+                        netBalancesByPhone[key] = (netBalancesByPhone[key] ?: 0.0) + s.amount
                     }
                 }
             }
 
+            // Convert to SettleUpDebt
+            val contacts = contactRepository.getAllContactsOnce()
+            val contactsByCanonical = contacts.associateBy { canonicalPhone(it.phone) }
+            val allDebts = mutableListOf<SettleUpDebt>()
+            for ((canonical, net) in netBalancesByPhone) {
+                if (kotlin.math.abs(net) < 0.01) continue
+                val originalPhone = canonicalToOriginalPhone[canonical] ?: canonical
+                val name = contactsByCanonical[canonical]?.name ?: originalPhone
+                allDebts.add(
+                    SettleUpDebt(
+                        canonicalPhone = canonical,
+                        personPhone = originalPhone,
+                        personName = name,
+                        amountBase = kotlin.math.abs(net),
+                        youOwe = net < 0,
+                        groupId = targetGroupId
+                    )
+                )
+            }
+
             _debts.value = allDebts
-            _totalYouOwe.value = allDebts.filter { it.youOwe }.sumOf { it.amount }
-            _totalOwedToYou.value = allDebts.filter { !it.youOwe }.sumOf { it.amount }
+            _totalYouOwe.value = allDebts.filter { it.youOwe }.sumOf { it.amountBase }
+            _totalOwedToYou.value = allDebts.filter { !it.youOwe }.sumOf { it.amountBase }
         }
     }
 
@@ -109,14 +180,76 @@ class SettleUpViewModel(
                     fromPhone = currentUserPhone,
                     toPhone = toPhone,
                     amount = baseAmount,
-                    note = "Settled externally"
+                    note = "Pending approval"
                 )
-                appSettingsRepository.adjustCurrentBankBalance(-baseAmount)
                 loadAllDebts() // Refresh
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "Failed to record payment")
             }
+        }
+    }
+
+    fun recordPaymentInBase(
+        toPhone: String,
+        amountBase: Double,
+        groupId: String?,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                expenseRepository.recordSettlement(
+                    groupId = groupId,
+                    fromPhone = currentUserPhone,
+                    toPhone = toPhone,
+                    amount = amountBase,
+                    note = "Pending approval"
+                )
+                loadAllDebts()
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to record payment")
+            }
+        }
+    }
+
+    private fun observeSettlements() {
+        viewModelScope.launch {
+            expenseRepository.getSettlementsForUser(currentUserPhone)?.collectLatest { records ->
+                val contacts = contactRepository.getAllContactsOnce()
+                val pendingList = records.filter { it.status == "PENDING" }.map { record ->
+                    val isIncoming = record.toPhone == currentUserPhone
+                    val otherPhone = if (isIncoming) record.fromPhone else record.toPhone
+                    val otherName = contacts.find { it.phone == otherPhone }?.name ?: otherPhone
+                    PendingPaymentUI(
+                        id = record.id,
+                        otherPhone = otherPhone,
+                        otherName = otherName,
+                        amount = record.amount,
+                        isIncoming = isIncoming
+                    )
+                }
+                _pendingPayments.value = pendingList
+            }
+        }
+    }
+
+    fun acceptPayment(settlementId: String) {
+        viewModelScope.launch {
+            val settlement = expenseRepository.getSettlementById(settlementId)
+            if (settlement != null) {
+                appSettingsRepository.adjustCurrentBankBalance(settlement.amount) // receiver gets money
+            }
+            expenseRepository.updateSettlementStatus(settlementId, "COMPLETED")
+            loadAllDebts()
+        }
+    }
+
+    fun rejectPayment(settlementId: String) {
+        viewModelScope.launch {
+            expenseRepository.updateSettlementStatus(settlementId, "REJECTED")
+            loadAllDebts()
         }
     }
 }

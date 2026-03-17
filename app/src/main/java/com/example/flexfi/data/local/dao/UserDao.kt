@@ -15,6 +15,9 @@ interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
     fun getCurrentUserFlow(): Flow<UserEntity?>
 
+    @Query("SELECT * FROM users LIMIT 1")
+    suspend fun getCurrentUserFlowOnce(): UserEntity?
+
     @Query("SELECT * FROM users WHERE id = :id")
     suspend fun getUser(id: String): UserEntity?
 

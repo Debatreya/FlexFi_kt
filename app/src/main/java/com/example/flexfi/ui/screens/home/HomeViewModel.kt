@@ -14,6 +14,7 @@ import com.example.flexfi.data.repository.GroupRepository
 import com.example.flexfi.data.repository.PersonalExpenseRepository
 import com.example.flexfi.data.repository.StreakRepository
 import com.example.flexfi.data.repository.UserRepository
+import com.example.flexfi.data.repository.ContactRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,17 @@ data class DashboardBalances(
     val net: Double = 0.0
 )
 
+data class ActivityItem(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val amount: Double,
+    val baseAmount: Double,
+    val currency: String,
+    val category: String,
+    val createdAt: Long
+)
+
 class HomeViewModel(
     private val authService: FirebaseAuthService,
     private val userRepository: UserRepository,
@@ -33,7 +45,8 @@ class HomeViewModel(
     private val expenseRepository: ExpenseRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val contactRepository: ContactRepository
 ) : ViewModel() {
 
     private val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: ""
@@ -41,8 +54,8 @@ class HomeViewModel(
     private val _streak = MutableStateFlow<StreakEntity?>(null)
     val streak: StateFlow<StreakEntity?> = _streak.asStateFlow()
 
-    private val _recentActivity = MutableStateFlow<List<PersonalExpenseEntity>>(emptyList())
-    val recentActivity: StateFlow<List<PersonalExpenseEntity>> = _recentActivity.asStateFlow()
+    private val _recentActivity = MutableStateFlow<List<ActivityItem>>(emptyList())
+    val recentActivity: StateFlow<List<ActivityItem>> = _recentActivity.asStateFlow()
 
     private val _activeGroups = MutableStateFlow<List<GroupEntity>>(emptyList())
     val activeGroups: StateFlow<List<GroupEntity>> = _activeGroups.asStateFlow()
@@ -62,6 +75,26 @@ class HomeViewModel(
 
     init {
         loadDashboardData()
+        syncAllData()
+    }
+
+    private fun syncAllData() {
+        if (currentUserPhone.isBlank()) return
+        viewModelScope.launch {
+            try {
+                userRepository.syncUser(currentUserPhone)
+                contactRepository.syncAllContacts()
+                groupRepository.syncGroupsForUser(currentUserPhone)
+                expenseRepository.syncSettlementsForUser(currentUserPhone)
+                // After syncing groups, get the latest to sync expenses
+                val groups = groupRepository.getGroupsForUserOnce(currentUserPhone)
+                for (group in groups) {
+                    expenseRepository.syncExpensesForGroup(group.id)
+                }
+            } catch (e: Exception) {
+                // Ignore sync errors silently for now
+            }
+        }
     }
 
     private fun loadDashboardData() {
@@ -78,7 +111,6 @@ class HomeViewModel(
         viewModelScope.launch {
             personalExpenseRepository.getExpenses(currentUserPhone).collect { expenses ->
                 cachedPersonalExpenses = expenses
-                _recentActivity.value = expenses.take(10) // Only top 10 for dashboard
                 recalculateAndPersistTotalBalance()
             }
         }
@@ -145,8 +177,42 @@ class HomeViewModel(
         )
     }
 
+    private fun updateRecentActivity() {
+        val items = mutableListOf<ActivityItem>()
+        cachedPersonalExpenses.forEach { p ->
+            items.add(ActivityItem(
+                id = p.id,
+                title = p.description ?: "Expense",
+                subtitle = "${p.category} • ${if (p.source == "GROUP") "Group" else "Personal"}",
+                amount = p.amount,
+                baseAmount = p.baseAmount,
+                currency = p.currency,
+                category = p.category,
+                createdAt = p.createdAt
+            ))
+        }
+        cachedSettlements.forEach { s ->
+            val isIncoming = s.toPhone == currentUserPhone
+            val title = if (isIncoming) "Money Received" else "Money Sent"
+            val typeStr = if (isIncoming) "Incoming" else "Outgoing"
+            items.add(ActivityItem(
+                id = s.id,
+                title = title,
+                subtitle = "Transfer • $typeStr",
+                amount = s.amount,
+                baseAmount = s.amount,
+                currency = "USD",
+                category = "Transfer",
+                createdAt = s.createdAt
+            ))
+        }
+        _recentActivity.value = items.sortedByDescending { it.createdAt }.take(10)
+    }
+
     private fun recalculateAndPersistTotalBalance() {
         if (currentUserPhone.isBlank()) return
+        
+        updateRecentActivity()
 
         val activeGroupIds = cachedGroups.map { it.id }.toHashSet()
         val anchor = balanceAnchorMillis

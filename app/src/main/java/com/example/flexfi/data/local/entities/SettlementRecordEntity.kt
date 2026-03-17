@@ -16,5 +16,6 @@ data class SettlementRecordEntity(
     val toPhone: String,        // who received
     val amount: Double,
     val note: String = "",
+    val status: String = "PENDING", // PENDING, COMPLETED, REJECTED
     val createdAt: Long = System.currentTimeMillis()
 )

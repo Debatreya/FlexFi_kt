@@ -9,9 +9,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.example.flexfi.data.remote.ExchangeRateApi
+import com.example.flexfi.data.repository.ExpenseRepository
 
 class ContactViewModel(
     private val contactRepository: ContactRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val exchangeRateApi: ExchangeRateApi,
     private val authService: FirebaseAuthService
 ) : ViewModel() {
 
@@ -39,6 +43,33 @@ class ContactViewModel(
     fun deleteContact(contactId: String) {
         viewModelScope.launch {
             contactRepository.deleteContact(contactId)
+        }
+    }
+
+    fun recordDirectPayment(
+        toPhone: String,
+        amount: Double,
+        currency: String,
+        note: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: return
+        viewModelScope.launch {
+            try {
+                val rateToBase = exchangeRateApi.getRate(currency, "USD", System.currentTimeMillis())
+                val baseAmount = amount * rateToBase
+                expenseRepository.recordSettlement(
+                    groupId = null,
+                    fromPhone = currentUserPhone,
+                    toPhone = toPhone,
+                    amount = baseAmount,
+                    note = note
+                )
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Failed to record payment")
+            }
         }
     }
 }

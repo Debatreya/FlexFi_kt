@@ -28,7 +28,8 @@ class ExpenseRepository(
     private val firestoreExpenseService: FirestoreExpenseService,
     private val personalExpenseDao: PersonalExpenseDao,
     private val exchangeRateApi: ExchangeRateApi,
-    private val settlementDao: SettlementDao? = null
+    private val settlementDao: SettlementDao? = null,
+    private val firestoreSettlementService: com.example.flexfi.data.remote.FirestoreSettlementService? = null
 ) {
 
     // ──────────────────────────────────────────────
@@ -223,12 +224,14 @@ class ExpenseRepository(
         // Factor in settlements: fromPhone paid toPhone, so adjust accordingly
         val settlements = settlementDao?.getSettlementsForGroupOnce(groupId) ?: emptyList()
         for (record in settlements) {
-            // fromPhone made a payment → reduce their debt (increase balance)
-            balances[record.fromPhone] =
-                (balances[record.fromPhone] ?: 0.0) + record.amount
-            // toPhone received payment → reduce what's owed to them (decrease balance)
-            balances[record.toPhone] =
-                (balances[record.toPhone] ?: 0.0) - record.amount
+            if (record.status == "COMPLETED") {
+                // fromPhone made a payment → reduce their debt (increase balance)
+                balances[record.fromPhone] =
+                    (balances[record.fromPhone] ?: 0.0) + record.amount
+                // toPhone received payment → reduce what's owed to them (decrease balance)
+                balances[record.toPhone] =
+                    (balances[record.toPhone] ?: 0.0) - record.amount
+            }
         }
 
         return balances
@@ -300,6 +303,36 @@ class ExpenseRepository(
             note = note
         )
         settlementDao?.insert(record)
+
+        firestoreSettlementService?.createSettlement(
+            com.example.flexfi.data.remote.firestoreModels.SettlementDoc(
+                id = record.id,
+                groupId = record.groupId,
+                fromPhone = record.fromPhone,
+                toPhone = record.toPhone,
+                amount = record.amount,
+                note = record.note,
+                status = record.status,
+                createdAt = record.createdAt
+            )
+        )
+    }
+
+    suspend fun syncSettlementsForUser(phone: String) {
+        val remoteDocs = firestoreSettlementService?.getSettlementsForUser(phone) ?: return
+        remoteDocs.forEach { doc ->
+            val entity = SettlementRecordEntity(
+                id = doc.id,
+                groupId = doc.groupId,
+                fromPhone = doc.fromPhone,
+                toPhone = doc.toPhone,
+                amount = doc.amount,
+                note = doc.note,
+                status = doc.status,
+                createdAt = doc.createdAt
+            )
+            settlementDao?.insert(entity)
+        }
     }
 
     fun getSettlementsForGroup(groupId: String): Flow<List<SettlementRecordEntity>>? =
@@ -307,6 +340,18 @@ class ExpenseRepository(
 
     fun getSettlementsForUser(phone: String): Flow<List<SettlementRecordEntity>>? =
         settlementDao?.getSettlementsForUser(phone)
+
+    suspend fun getSettlementsForUserOnce(phone: String): List<SettlementRecordEntity> =
+        settlementDao?.getSettlementsForUserOnce(phone) ?: emptyList()
+
+    suspend fun getSettlementById(id: String): SettlementRecordEntity? {
+        return settlementDao?.getSettlementById(id)
+    }
+
+    suspend fun updateSettlementStatus(id: String, status: String) {
+        settlementDao?.updateStatus(id, status)
+        firestoreSettlementService?.updateSettlementStatus(id, status)
+    }
 
     // ──────────────────────────────────────────────
     //  PERSONAL EXPENSE MIRROR

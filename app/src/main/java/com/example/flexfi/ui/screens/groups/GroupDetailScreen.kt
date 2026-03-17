@@ -31,7 +31,8 @@ fun GroupDetailScreen(
     onEditClick: (String) -> Unit,
     onDeleteSuccess: () -> Unit,
     onAddExpenseClick: (String) -> Unit,
-    onExpenseClick: (String) -> Unit
+    onExpenseClick: (String) -> Unit,
+    onSettleUpClick: () -> Unit
 ) {
     var group by remember { mutableStateOf<GroupEntity?>(null) }
     val members by viewModel.getGroupMembers(groupId).collectAsState(initial = emptyList())
@@ -163,6 +164,21 @@ fun GroupDetailScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Settle Up button
+            if (balances.isNotEmpty()) {
+                item {
+                    OutlinedButton(
+                        onClick = onSettleUpClick,
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Handshake, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Settle Up", fontSize = 14.sp)
                     }
                 }
             }

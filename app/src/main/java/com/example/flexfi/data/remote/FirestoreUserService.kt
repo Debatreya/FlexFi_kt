@@ -3,6 +3,7 @@ package com.example.flexfi.data.remote
 import android.util.Log
 import com.example.flexfi.data.remote.firestoreModels.UserDoc
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 class FirestoreUserService {
@@ -49,6 +50,25 @@ class FirestoreUserService {
             Log.d("FirestoreUserService", "User created successfully in Firestore")
         } catch (e: Exception) {
             Log.e("FirestoreUserService", "Error creating user", e)
+            throw e
+        }
+    }
+
+    suspend fun updateUserProfile(uid: String, name: String, email: String?) {
+        try {
+            val payload = mutableMapOf<String, Any>(
+                "name" to name
+            )
+            if (email != null) {
+                payload["email"] = email
+            }
+
+            firestore.collection("users")
+                .document(uid)
+                .set(payload, SetOptions.merge())
+                .await()
+        } catch (e: Exception) {
+            Log.e("FirestoreUserService", "Error updating user profile", e)
             throw e
         }
     }
