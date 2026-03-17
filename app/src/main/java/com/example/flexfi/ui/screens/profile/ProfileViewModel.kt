@@ -99,6 +99,7 @@ class ProfileViewModel(
         viewModelScope.launch {
             syncDisplayRateForSettings()
             val baseAmount = CurrencyProvider.convertToBase(amountInDisplay)
+            settingsRepository.setBalanceAnchor(baseAmount)
             settingsRepository.saveSettings(_state.value.settings.copy(currentBankBalance = baseAmount))
         }
     }
@@ -109,6 +110,7 @@ class ProfileViewModel(
             syncDisplayRateForSettings()
             val baseIncome = CurrencyProvider.convertToBase(incomeInDisplay)
             val baseBalance = CurrencyProvider.convertToBase(balanceInDisplay)
+            settingsRepository.setBalanceAnchor(baseBalance)
             settingsRepository.saveSettings(
                 _state.value.settings.copy(
                     monthlyIncome = baseIncome,

@@ -58,6 +58,7 @@ import com.example.flexfi.utils.CurrencyProvider
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronRight
@@ -76,7 +77,8 @@ fun ProfileScreen(
     viewModel: ProfileViewModel,
     onBack: () -> Unit,
     onOpenExpenses: () -> Unit,
-    onOpenAnalytics: () -> Unit
+    onOpenAnalytics: () -> Unit,
+    onOpenBudgets: () -> Unit
 ) {
     val settings by viewModel.settings.collectAsState()
     val recurring by viewModel.recurring.collectAsState()
@@ -272,6 +274,13 @@ fun ProfileScreen(
                 subtitle = "Track insights and monthly patterns",
                 icon = Icons.Default.BarChart,
                 onClick = onOpenAnalytics
+            )
+
+            ProfileActionCard(
+                title = "Open Budgets",
+                subtitle = "Set monthly limits and rollover rules",
+                icon = Icons.Default.AccountBalanceWallet,
+                onClick = onOpenBudgets
             )
 
             Spacer(Modifier.height(24.dp))

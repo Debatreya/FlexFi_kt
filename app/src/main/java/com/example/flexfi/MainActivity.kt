@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
         val groupRepository = GroupRepository(db.groupDao(), db.contactDao(), firestoreGroupService)
         val personalExpenseRepository = PersonalExpenseRepository(db.personalExpenseDao(), exchangeRateApi)
         val streakRepository = StreakRepository(db.streakDao())
-        val appSettingsRepository = AppSettingsRepository(db.appSettingsDao())
+        val appSettingsRepository = AppSettingsRepository(db.appSettingsDao(), applicationContext)
         val recurringTransactionRepository = RecurringTransactionRepository(db.recurringTransactionDao())
         val expenseRepository = ExpenseRepository(
             db.expenseDao(),
@@ -371,7 +371,8 @@ fun FlexFiApp(
                     viewModel = profileViewModel,
                     onBack = { navController.popBackStack() },
                     onOpenExpenses = { navController.navigate("personal_dashboard") },
-                    onOpenAnalytics = { navController.navigate("analytics") }
+                    onOpenAnalytics = { navController.navigate("analytics") },
+                    onOpenBudgets = { navController.navigate("budget") }
                 )
             }
             composable("add_personal_expense") {
@@ -395,6 +396,12 @@ fun FlexFiApp(
             composable("analytics") {
                 AnalyticsScreen(
                     viewModel = analyticsViewModel,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("budget") {
+                BudgetScreen(
+                    viewModel = budgetViewModel,
                     onBack = { navController.popBackStack() }
                 )
             }

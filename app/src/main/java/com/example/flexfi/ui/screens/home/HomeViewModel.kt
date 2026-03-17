@@ -2,8 +2,10 @@ package com.example.flexfi.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
+import com.example.flexfi.data.local.entities.SettlementRecordEntity
 import com.example.flexfi.data.local.entities.StreakEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
 import com.example.flexfi.data.repository.AppSettingsRepository
@@ -49,6 +51,12 @@ class HomeViewModel(
     val balances: StateFlow<DashboardBalances> = _balances.asStateFlow()
 
     private var settingsBankBalanceBase: Double = 0.0
+    private var openingBankBalanceBase: Double = 0.0
+    private var balanceAnchorMillis: Long = 0L
+    private var cachedPersonalExpenses: List<PersonalExpenseEntity> = emptyList()
+    private var cachedGroupExpenses: List<ExpenseEntity> = emptyList()
+    private var cachedSettlements: List<SettlementRecordEntity> = emptyList()
+    private var cachedGroups: List<GroupEntity> = emptyList()
 
     val currentUserFlow = userRepository.getCurrentUserFlow()
 
@@ -69,23 +77,44 @@ class HomeViewModel(
         // Load Recent Activity (personal & group combined via the mirror)
         viewModelScope.launch {
             personalExpenseRepository.getExpenses(currentUserPhone).collect { expenses ->
+                cachedPersonalExpenses = expenses
                 _recentActivity.value = expenses.take(10) // Only top 10 for dashboard
+                recalculateAndPersistTotalBalance()
             }
         }
 
         // Load Active Groups and Calculate Global Balances
         viewModelScope.launch {
             groupRepository.getGroupsForUser(currentUserPhone).collect { groups ->
+                cachedGroups = groups
                 _activeGroups.value = groups
                 calculateGlobalBalances(groups)
+                recalculateAndPersistTotalBalance()
+            }
+        }
+
+        viewModelScope.launch {
+            expenseRepository.getAllExpenses().collect { expenses ->
+                cachedGroupExpenses = expenses
+                recalculateAndPersistTotalBalance()
+            }
+        }
+
+        viewModelScope.launch {
+            expenseRepository.getSettlementsForUser(currentUserPhone)?.collect { records ->
+                cachedSettlements = records
+                recalculateAndPersistTotalBalance()
             }
         }
 
         // Keep dashboard total in sync with locally stored bank value.
         viewModelScope.launch {
-            appSettingsRepository.getSettings().collect {
-                settingsBankBalanceBase = it.currentBankBalance
-                recalculateTotalBalance()
+            appSettingsRepository.getSettings().collect { settings ->
+                settingsBankBalanceBase = settings.currentBankBalance
+                appSettingsRepository.ensureBalanceAnchor(settings.currentBankBalance)
+                openingBankBalanceBase = appSettingsRepository.getOpeningBalanceBase(settings.currentBankBalance)
+                balanceAnchorMillis = appSettingsRepository.getBalanceAnchorMillis()
+                recalculateAndPersistTotalBalance()
             }
         }
     }
@@ -109,15 +138,57 @@ class HomeViewModel(
         val net = totalOwedToYou - totalYouOwe
         
         _balances.value = DashboardBalances(
-            totalBalance = settingsBankBalanceBase,
+            totalBalance = _balances.value.totalBalance,
             youOwe = totalYouOwe,
             owedToYou = totalOwedToYou,
             net = net
         )
     }
 
-    private fun recalculateTotalBalance() {
+    private fun recalculateAndPersistTotalBalance() {
         if (currentUserPhone.isBlank()) return
-        _balances.value = _balances.value.copy(totalBalance = settingsBankBalanceBase)
+
+        val activeGroupIds = cachedGroups.map { it.id }.toHashSet()
+        val anchor = balanceAnchorMillis
+
+        val personalCashDelta = cachedPersonalExpenses
+            .asSequence()
+            .filter { it.source == "PERSONAL" }
+            .filter { it.createdAt >= anchor }
+            .sumOf { personal ->
+                when (personal.type.uppercase()) {
+                    "INCOME" -> personal.baseAmount
+                    "EXPENSE" -> -personal.baseAmount
+                    else -> 0.0
+                }
+            }
+
+        val groupCashOut = cachedGroupExpenses
+            .asSequence()
+            .filter { it.groupId in activeGroupIds }
+            .filter { it.paidByPhone == currentUserPhone }
+            .filter { it.createdAt >= anchor }
+            .sumOf { it.baseAmount }
+
+        val settlementNet = cachedSettlements
+            .asSequence()
+            .filter { it.createdAt >= anchor }
+            .sumOf { record ->
+                when {
+                    record.toPhone == currentUserPhone -> record.amount
+                    record.fromPhone == currentUserPhone -> -record.amount
+                    else -> 0.0
+                }
+            }
+
+        val derivedBalance = openingBankBalanceBase + personalCashDelta - groupCashOut + settlementNet
+        _balances.value = _balances.value.copy(totalBalance = derivedBalance)
+
+        if (kotlin.math.abs(derivedBalance - settingsBankBalanceBase) > 0.01) {
+            viewModelScope.launch {
+                val latest = appSettingsRepository.getSettingsOnce()
+                appSettingsRepository.saveSettings(latest.copy(currentBankBalance = derivedBalance))
+            }
+        }
     }
 }
