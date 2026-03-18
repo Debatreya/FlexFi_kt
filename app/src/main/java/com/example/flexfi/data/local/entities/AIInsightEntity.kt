@@ -7,8 +7,9 @@ import androidx.room.PrimaryKey
 data class AIInsightEntity(
     @PrimaryKey
     val id: String,
-    val insights: String,                  // JSON serialized List<String>
+    val content: String,                   // JSON list for insights or raw string for explanation
     val dataHash: Long,                    // Hash of input data (for cache matching)
+    val cacheType: String,                 // INSIGHTS or EXPLAIN
     val generatedAt: Long = System.currentTimeMillis(),
     val expiresAt: Long = 0L               // currentTimeMillis() + 24h
 )

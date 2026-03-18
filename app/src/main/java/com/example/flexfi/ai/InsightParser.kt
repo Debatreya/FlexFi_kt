@@ -18,7 +18,9 @@ object InsightParser {
             return emptyList()
         }
 
-        val lines = llmResponse.lines()
+        val normalizedResponse = sanitizeOutput(llmResponse)
+
+        val lines = normalizedResponse.lines()
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
@@ -75,7 +77,7 @@ object InsightParser {
             return "Unable to generate spending explanation."
         }
 
-        val lines = llmResponse.lines()
+        val lines = sanitizeOutput(llmResponse).lines()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .take(4) // Max 4 lines
@@ -86,13 +88,34 @@ object InsightParser {
     }
 
     /**
+     * Parses and validates assistant output.
+     */
+    fun parseAssistantResponse(llmResponse: String?): String {
+        if (llmResponse.isNullOrBlank()) {
+            return "I could not answer with the available data."
+        }
+
+        val lines = sanitizeOutput(llmResponse)
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .map { it.removePrefix("-").removePrefix("*").trim() }
+            .take(3)
+
+        if (lines.isEmpty()) {
+            return "I could not answer with the available data."
+        }
+        return lines.joinToString("\n")
+    }
+
+    /**
      * Cleans an individual insight:
      * - Removes trailing punctuation
      * - Validates word count (max 15)
      * - Truncates if too long
      */
     private fun cleanInsight(text: String): String {
-        var cleaned = text.trim()
+        var cleaned = sanitizeOutput(text).trim()
 
         // Remove trailing punctuation
         cleaned = cleaned.trimEnd('.', '!', '?', ',', ';', ':')
@@ -128,5 +151,14 @@ object InsightParser {
      */
     fun generateDataHash(text: String): Long {
         return text.hashCode().toLong()
+    }
+
+    private fun sanitizeOutput(text: String): String {
+        return text
+            .replace("```", "")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("\u0000", "")
+            .trim()
     }
 }

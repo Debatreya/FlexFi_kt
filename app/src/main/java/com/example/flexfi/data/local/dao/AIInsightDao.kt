@@ -9,11 +9,11 @@ import com.example.flexfi.data.local.entities.AIInsightEntity
 @Dao
 interface AIInsightDao {
 
-    @Query("SELECT * FROM ai_insights WHERE dataHash = :dataHash LIMIT 1")
-    suspend fun getByDataHash(dataHash: Long): AIInsightEntity?
+    @Query("SELECT * FROM ai_insights WHERE dataHash = :dataHash AND cacheType = :cacheType LIMIT 1")
+    suspend fun getByDataHashAndType(dataHash: Long, cacheType: String): AIInsightEntity?
 
-    @Query("SELECT * FROM ai_insights ORDER BY generatedAt DESC LIMIT 1")
-    suspend fun getLatest(): AIInsightEntity?
+    @Query("SELECT * FROM ai_insights WHERE cacheType = :cacheType ORDER BY generatedAt DESC LIMIT 1")
+    suspend fun getLatestByType(cacheType: String): AIInsightEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(entity: AIInsightEntity): Long

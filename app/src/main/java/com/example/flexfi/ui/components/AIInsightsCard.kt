@@ -31,9 +31,11 @@ import androidx.compose.ui.unit.sp
 fun AIInsightsCard(
     insights: List<String>,
     isLoading: Boolean,
+    loadingLabel: String,
     modelStatusMessage: String,
     modelProgressPercent: Int,
     onExplainClick: () -> Unit,
+    onAskAssistantClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -72,7 +74,7 @@ fun AIInsightsCard(
 
             if (isLoading) {
                 Text(
-                    text = modelStatusMessage,
+                    text = loadingLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -82,6 +84,15 @@ fun AIInsightsCard(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            if (modelStatusMessage.isNotBlank()) {
+                Text(
+                    text = modelStatusMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             // ─────── INSIGHTS LIST ───────
@@ -118,14 +129,29 @@ fun AIInsightsCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ─────── EXPLAIN BUTTON ───────
-            Button(
-                onClick = onExplainClick,
-                modifier = Modifier.align(Alignment.End),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Explain My Spending", fontSize = 12.sp)
+                Button(
+                    onClick = onAskAssistantClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Ask FlexFi AI", fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Button(
+                    onClick = onExplainClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary
+                    )
+                ) {
+                    Text("Explain Spending", fontSize = 12.sp)
+                }
             }
         }
     }

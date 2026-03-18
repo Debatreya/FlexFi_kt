@@ -4,11 +4,16 @@ import android.content.Context
 import android.util.Log
 import com.example.flexfi.BuildConfig
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -41,6 +46,7 @@ class ModelManager private constructor(private val context: Context) {
         private const val TAG = "ModelManager"
         private const val MODEL_DIR_NAME = "ai_models"
         private const val MODEL_FILE_NAME = "gemma-3-1b-it-int4.task"
+        private const val WARMUP_PROMPT = "Hi"
 
         // Fallback URL used only when BuildConfig.MODEL_DOWNLOAD_URL is empty.
         private const val DEFAULT_MODEL_DOWNLOAD_URL = "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task?download=true"
@@ -65,6 +71,12 @@ class ModelManager private constructor(private val context: Context) {
     @Volatile
     private var llmInference: LlmInference? = null
         private set
+
+    @Volatile
+    private var warmupTriggered: Boolean = false
+
+    private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val inferenceMutex = Mutex()
 
     private val _downloadState = MutableStateFlow(ModelDownloadState())
     val downloadState: StateFlow<ModelDownloadState> = _downloadState.asStateFlow()
@@ -181,15 +193,17 @@ class ModelManager private constructor(private val context: Context) {
 
             Log.d(TAG, "Loading model from: ${modelFile.absolutePath}")
 
-            llmInference?.close()
-            val builder = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelFile.absolutePath)
-                .setMaxTokens(256)
-                .setMaxTopK(40)
-            applyOptionalFloatOption(builder, "setTemperature", 0.2f)
-            applyOptionalIntOption(builder, "setRandomSeed", 42)
-            val options = builder.build()
-            llmInference = LlmInference.createFromOptions(context, options)
+            inferenceMutex.withLock {
+                llmInference?.close()
+                val builder = LlmInference.LlmInferenceOptions.builder()
+                    .setModelPath(modelFile.absolutePath)
+                    .setMaxTokens(256)
+                    .setMaxTopK(40)
+                applyOptionalFloatOption(builder, "setTemperature", 0.2f)
+                applyOptionalIntOption(builder, "setRandomSeed", 42)
+                val options = builder.build()
+                llmInference = LlmInference.createFromOptions(context, options)
+            }
 
             Log.d(TAG, "Model loaded successfully")
             _downloadState.value = ModelDownloadState(
@@ -197,6 +211,7 @@ class ModelManager private constructor(private val context: Context) {
                 progressPercent = 100,
                 message = "Model ready"
             )
+            triggerWarmupIfNeeded()
         } catch (e: Exception) {
             Log.e(TAG, "Model loading failed", e)
             _downloadState.value = ModelDownloadState(
@@ -231,30 +246,32 @@ class ModelManager private constructor(private val context: Context) {
         temperature: Float = 0.2f,
         topK: Int = 40
     ): String? = withContext(Dispatchers.Default) {
-        val engine = llmInference
-        if (engine == null || !isModelReady()) {
-            Log.w(TAG, "Model not ready for inference")
-            return@withContext null
-        }
-
-        try {
-            // Rebuild engine if runtime options differ from default.
-            if (maxTokens != 256 || temperature != 0.2f || topK != 40) {
-                val runtimeBuilder = LlmInference.LlmInferenceOptions.builder()
-                    .setModelPath(modelFile.absolutePath)
-                    .setMaxTokens(maxTokens)
-                    .setMaxTopK(topK)
-                applyOptionalFloatOption(runtimeBuilder, "setTemperature", temperature)
-                applyOptionalIntOption(runtimeBuilder, "setRandomSeed", 42)
-                val runtimeOptions = runtimeBuilder.build()
-                llmInference?.close()
-                llmInference = LlmInference.createFromOptions(context, runtimeOptions)
+        inferenceMutex.withLock {
+            val engine = llmInference
+            if (engine == null || !isModelReady()) {
+                Log.w(TAG, "Model not ready for inference")
+                return@withLock null
             }
 
-            llmInference?.generateResponse(prompt)
-        } catch (e: Exception) {
-            Log.e(TAG, "Text generation failed", e)
-            null
+            try {
+                // Rebuild engine if runtime options differ from default.
+                if (maxTokens != 256 || temperature != 0.2f || topK != 40) {
+                    val runtimeBuilder = LlmInference.LlmInferenceOptions.builder()
+                        .setModelPath(modelFile.absolutePath)
+                        .setMaxTokens(maxTokens)
+                        .setMaxTopK(topK)
+                    applyOptionalFloatOption(runtimeBuilder, "setTemperature", temperature)
+                    applyOptionalIntOption(runtimeBuilder, "setRandomSeed", 42)
+                    val runtimeOptions = runtimeBuilder.build()
+                    llmInference?.close()
+                    llmInference = LlmInference.createFromOptions(context, runtimeOptions)
+                }
+
+                llmInference?.generateResponse(prompt)
+            } catch (e: Exception) {
+                Log.e(TAG, "Text generation failed", e)
+                null
+            }
         }
     }
 
@@ -264,8 +281,11 @@ class ModelManager private constructor(private val context: Context) {
      */
     suspend fun clearModel() = withContext(Dispatchers.IO) {
         try {
-            llmInference?.close()
-            llmInference = null
+            inferenceMutex.withLock {
+                llmInference?.close()
+                llmInference = null
+            }
+            warmupTriggered = false
             if (modelFile.exists()) {
                 modelFile.delete()
                 Log.d(TAG, "Model file deleted")
@@ -375,6 +395,21 @@ class ModelManager private constructor(private val context: Context) {
             method?.invoke(target, value)
         }.onFailure {
             Log.d(TAG, "Optional option not supported: $methodName")
+        }
+    }
+
+    private fun triggerWarmupIfNeeded() {
+        if (warmupTriggered) return
+        warmupTriggered = true
+
+        warmupScope.launch {
+            try {
+                // Reuse safe inference path to avoid concurrent native access.
+                generateText(WARMUP_PROMPT, maxTokens = 16, temperature = 0.2f, topK = 20)
+                Log.d(TAG, "Model warmup completed")
+            } catch (e: Exception) {
+                Log.w(TAG, "Model warmup failed", e)
+            }
         }
     }
 }

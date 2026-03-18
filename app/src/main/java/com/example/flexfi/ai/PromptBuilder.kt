@@ -13,17 +13,13 @@ object PromptBuilder {
      * @return Complete prompt ready for LLM ingestion
      */
     fun buildInsightsPrompt(dataString: String): String {
-        return """You are a financial analytics engine.
-
-Analyze the given data and generate EXACTLY 3 insights.
-
+        return """You are a finance analytics engine.
+Return EXACTLY 3 factual observations from data.
 Rules:
-- Max 15 words per insight
+- Max 15 words each
 - No advice
-- Only observations
-- Output numbered list (1. ... 2. ... 3. ...)
-- Keep insights factual and data-driven
-
+- Use only given data
+- Output numbered list: 1. 2. 3.
 Data:
 $dataString""".trimIndent()
     }
@@ -36,18 +32,36 @@ $dataString""".trimIndent()
      */
     fun buildExplainPrompt(dataString: String): String {
         return """You are a personal finance assistant.
-
-Explain the user's spending in simple terms.
-
+Explain spending patterns from data only.
 Rules:
-- Max 4 lines
-- Clear and helpful
+- Max 5 lines
+- Use only given data
+- Cite specific numbers from data
 - No generic advice
-- Use the user's local currency
-- Focus on key patterns or changes
-
+- No hallucination
 Data:
 $dataString""".trimIndent()
+    }
+
+    /**
+     * Strict stateless prompt for assistant mode.
+     */
+    fun buildAssistantPrompt(dataString: String, question: String): String {
+        return """You are a personal finance assistant.
+
+Answer the user's question using the given data.
+
+Rules:
+- Be concise (max 3 lines)
+- Use only given data
+- No generic advice
+- No hallucination
+
+Data:
+$dataString
+
+Question:
+$question""".trimIndent()
     }
 
     /**

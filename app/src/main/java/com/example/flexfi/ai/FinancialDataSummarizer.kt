@@ -13,6 +13,12 @@ import kotlin.math.abs
  */
 object FinancialDataSummarizer {
 
+    data class CompactMetrics(
+        val totalSpend: Double,
+        val topCategories: List<Pair<String, Double>>,
+        val topMerchants: List<Pair<String, Double>>
+    )
+
     /**
      * Generates a structured monthly financial summary from transaction data.
      *
@@ -112,6 +118,38 @@ object FinancialDataSummarizer {
     }
 
     /**
+     * Compact key-value context for low-latency prompts.
+     */
+    fun summarizeCompactData(
+        currentMonthExpenses: List<PersonalExpenseEntity>,
+        previousMonthExpenses: List<PersonalExpenseEntity>,
+        settlements: List<SettlementRecordEntity>,
+        streak: Int
+    ): String {
+        val current = calculateCompactMetrics(currentMonthExpenses)
+        val previous = calculateCompactMetrics(previousMonthExpenses)
+
+        val topCategory = current.topCategories.joinToString(",") { "${it.first}:${it.second.toInt()}" }
+        val topMerchants = current.topMerchants.joinToString(",") { "${it.first}:${it.second.toInt()}" }
+
+        val safeTopCategory = if (topCategory.isBlank()) "None:0" else topCategory
+        val safeTopMerchants = if (topMerchants.isBlank()) "None:0" else topMerchants
+
+        // Separate settlements into YouOwe and OwedToYou for clarity
+        val (youOwe, owedToYou) = calculateSettlementSplit(settlements)
+
+        return buildString {
+            appendLine("Spend=${current.totalSpend.toInt()}")
+            appendLine("Prev=${previous.totalSpend.toInt()}")
+            appendLine("YouOwe=${youOwe.toInt()}")
+            appendLine("OwedToYou=${owedToYou.toInt()}")
+            appendLine("TopCat=$safeTopCategory")
+            appendLine("Top=$safeTopMerchants")
+            append("Streak=$streak")
+        }
+    }
+
+    /**
      * Analyzes expenses by category.
      * @return Map of category -> total amount
      */
@@ -136,6 +174,26 @@ object FinancialDataSummarizer {
             .sortedByDescending { it.second }
     }
 
+    private fun calculateCompactMetrics(expenses: List<PersonalExpenseEntity>): CompactMetrics {
+        val total = expenses
+            .filter { it.type == "EXPENSE" || it.type.isBlank() }
+            .sumOf { abs(it.baseAmount) }
+
+        val topCategories = analyzeByCategory(expenses)
+            .toList()
+            .sortedByDescending { it.second }
+            .take(3)
+
+        val topMerchants = analyzeByMerchant(expenses)
+            .take(2)
+
+        return CompactMetrics(
+            totalSpend = total,
+            topCategories = topCategories,
+            topMerchants = topMerchants
+        )
+    }
+
     /**
      * Calculates net settlement balance for the user.
      * Positive = user owes money; Negative = user is owed money.
@@ -144,6 +202,25 @@ object FinancialDataSummarizer {
         // Simplified: sum all amounts (sign indicates direction)
         // This is a placeholder; actual logic depends on settlement direction representation
         return settlements.sumOf { it.amount }
+    }
+
+    /**
+     * Splits settlements into two separate amounts for clarity.
+     * Returns Pair<YouOwe, OwedToYou>
+     */
+    private fun calculateSettlementSplit(settlements: List<SettlementRecordEntity>): Pair<Double, Double> {
+        var youOwe = 0.0
+        var owedToYou = 0.0
+        
+        settlements.forEach { settlement ->
+            if (settlement.amount > 0) {
+                youOwe += settlement.amount
+            } else {
+                owedToYou += abs(settlement.amount)
+            }
+        }
+        
+        return Pair(youOwe, owedToYou)
     }
 
     /**

@@ -43,9 +43,18 @@ fun HomeScreen(
     val aiInsights by viewModel.aiInsights.collectAsState()
     val aiExplanation by viewModel.aiExplanation.collectAsState()
     val aiLoading by viewModel.aiLoading.collectAsState()
+    val aiLoadingLabel by viewModel.aiLoadingLabel.collectAsState()
     val modelDownloadState by viewModel.modelDownloadState.collectAsState()
+    val aiExplainLoading by viewModel.aiExplainLoading.collectAsState()
+    val aiExplainError by viewModel.aiExplainError.collectAsState()
+    val assistantResponse by viewModel.assistantResponse.collectAsState()
+    val assistantLoading by viewModel.assistantLoading.collectAsState()
+    val assistantError by viewModel.assistantError.collectAsState()
+    val assistantQuestion by viewModel.assistantQuestion.collectAsState()
     var selectedTab by remember { mutableStateOf(BottomNavTab.HOME) }
     var showExplainSheet by remember { mutableStateOf(false) }
+    var showAssistantSheet by remember { mutableStateOf(false) }
+    var assistantInput by remember(assistantQuestion) { mutableStateOf(assistantQuestion) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -159,11 +168,17 @@ fun HomeScreen(
                 AIInsightsCard(
                     insights = aiInsights,
                     isLoading = aiLoading,
+                    loadingLabel = aiLoadingLabel,
                     modelStatusMessage = modelDownloadState.message,
                     modelProgressPercent = modelDownloadState.progressPercent,
                     onExplainClick = {
                         showExplainSheet = true
                         viewModel.explainSpending()
+                    },
+                    onAskAssistantClick = {
+                        showAssistantSheet = true
+                        viewModel.clearAssistantState()
+                        assistantInput = ""
                     }
                 )
             }
@@ -316,7 +331,25 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                if (aiExplanation != null) {
+                if (aiExplainLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Analyzing...", style = MaterialTheme.typography.bodySmall)
+                    }
+                } else if (!aiExplainError.isNullOrBlank()) {
+                    Text(
+                        text = aiExplainError ?: "Unable to analyze spending.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(onClick = { viewModel.retryExplain() }) {
+                        Text("Retry")
+                    }
+                } else if (aiExplanation != null) {
                     Text(
                         text = aiExplanation ?: "Loading...",
                         style = MaterialTheme.typography.bodyMedium,
@@ -341,6 +374,93 @@ fun HomeScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+
+    if (showAssistantSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAssistantSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Ask FlexFi AI",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                OutlinedTextField(
+                    value = assistantInput,
+                    onValueChange = { assistantInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Your question") },
+                    placeholder = { Text("Where am I overspending?") },
+                    maxLines = 3
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = { viewModel.submitAssistantQuestion(assistantInput) },
+                        enabled = !assistantLoading
+                    ) {
+                        Text("Ask")
+                    }
+                }
+
+                if (assistantLoading) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Thinking...", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                if (!assistantError.isNullOrBlank()) {
+                    Text(
+                        text = assistantError ?: "Unable to answer right now.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(onClick = { viewModel.retryAssistant() }) {
+                        Text("Retry")
+                    }
+                }
+
+                if (!assistantResponse.isNullOrBlank()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Text(
+                            text = assistantResponse ?: "",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { showAssistantSheet = false },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Close")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }

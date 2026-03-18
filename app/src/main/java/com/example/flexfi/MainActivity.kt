@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
         val modelManager = ModelManager.getInstance(applicationContext)
 
         // Initialize AIManager (background download of model on first launch)
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.Default) {
             modelManager.initialize()
         }
 

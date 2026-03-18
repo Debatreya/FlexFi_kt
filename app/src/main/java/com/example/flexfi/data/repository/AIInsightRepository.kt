@@ -9,20 +9,36 @@ import java.util.UUID
 
 class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
 
+    private companion object {
+        const val CACHE_TYPE_INSIGHTS = "INSIGHTS"
+        const val CACHE_TYPE_EXPLAIN = "EXPLAIN"
+    }
+
     /**
      * Retrieve cached insights if valid (not expired) and data hash matches
      * @param dataHash Hash of the financial data used to generate insights
      * @return Cached insights or null if cache miss or expired
      */
     suspend fun getInsightIfValid(dataHash: Long): List<String>? = withContext(Dispatchers.IO) {
-        val cached = aiInsightDao.getByDataHash(dataHash) ?: return@withContext null
+        val cached = aiInsightDao.getByDataHashAndType(dataHash, CACHE_TYPE_INSIGHTS) ?: return@withContext null
         
         // Check if cache is still valid (not expired)
         if (cached.expiresAt > System.currentTimeMillis()) {
-            return@withContext deserializeInsights(cached.insights)
+            return@withContext deserializeInsights(cached.content)
         }
         
         // Cache expired, delete it
+        aiInsightDao.deleteExpired(System.currentTimeMillis())
+        null
+    }
+
+    suspend fun getExplanationIfValid(dataHash: Long): String? = withContext(Dispatchers.IO) {
+        val cached = aiInsightDao.getByDataHashAndType(dataHash, CACHE_TYPE_EXPLAIN) ?: return@withContext null
+
+        if (cached.expiresAt > System.currentTimeMillis()) {
+            return@withContext cached.content
+        }
+
         aiInsightDao.deleteExpired(System.currentTimeMillis())
         null
     }
@@ -38,12 +54,29 @@ class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
         
         val entity = AIInsightEntity(
             id = UUID.randomUUID().toString(),
-            insights = serializeInsights(insights),
+            content = serializeInsights(insights),
             dataHash = dataHash,
+            cacheType = CACHE_TYPE_INSIGHTS,
             generatedAt = now,
             expiresAt = expiresAt
         )
         
+        aiInsightDao.insertOrUpdate(entity)
+    }
+
+    suspend fun cacheExplanation(explanation: String, dataHash: Long) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val expiresAt = now + (24 * 60 * 60 * 1000)
+
+        val entity = AIInsightEntity(
+            id = UUID.randomUUID().toString(),
+            content = explanation,
+            dataHash = dataHash,
+            cacheType = CACHE_TYPE_EXPLAIN,
+            generatedAt = now,
+            expiresAt = expiresAt
+        )
+
         aiInsightDao.insertOrUpdate(entity)
     }
 
@@ -65,8 +98,8 @@ class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
      * Get the most recently cached insights (regardless of expiry)
      */
     suspend fun getLatestCachedInsights(): List<String>? = withContext(Dispatchers.IO) {
-        val cached = aiInsightDao.getLatest() ?: return@withContext null
-        deserializeInsights(cached.insights)
+        val cached = aiInsightDao.getLatestByType(CACHE_TYPE_INSIGHTS) ?: return@withContext null
+        deserializeInsights(cached.content)
     }
 
     // Private serialization helpers

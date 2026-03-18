@@ -56,10 +56,10 @@ Consider budgeting for high-frequency merchants to optimize expenses."""
      * Generates a data-driven fallback explanation (2-4 lines) from summary text.
      */
     fun getExplanation(summary: String): String {
-        val totalSpend = summary.lineValue("Total Spend")
-        val topCategory = summary.lineValue("Highest Category")
+        val totalSpend = summary.keyValue("Spend") ?: summary.lineValue("Total Spend")
+        val topCategory = summary.keyValue("TopCat")?.substringBefore(":") ?: summary.lineValue("Highest Category")
         val avgDaily = summary.lineValue("Average Daily Spend")
-        val topMerchant = summary.sectionFirstItem("Top Merchants")
+        val topMerchant = summary.keyValue("Top")?.substringBefore(":") ?: summary.sectionFirstItem("Top Merchants")
 
         val lines = mutableListOf<String>()
         if (totalSpend != null) {
@@ -79,6 +79,28 @@ Consider budgeting for high-frequency merchants to optimize expenses."""
             return getExplanation()
         }
         return lines.take(4).joinToString("\n")
+    }
+
+    /**
+     * Deterministic fallback for assistant mode.
+     */
+    fun getAssistantResponse(summary: String, question: String): String {
+        val q = question.lowercase()
+        val spend = summary.keyValue("Spend") ?: "0"
+        val prev = summary.keyValue("Prev") ?: "0"
+        val topCategory = summary.keyValue("TopCat")?.substringBefore(":") ?: "Unknown"
+        val topMerchant = summary.keyValue("Top")?.substringBefore(":") ?: "Unknown"
+
+        return when {
+            q.contains("overspend") || q.contains("over spending") ->
+                "Highest spend is in $topCategory.\nTop merchant is $topMerchant.\nCurrent spend: $spend."
+            q.contains("biggest") || q.contains("highest") ->
+                "Biggest expense category is $topCategory.\nTop merchant is $topMerchant.\nCurrent spend: $spend."
+            q.contains("compare") || q.contains("last month") || q.contains("previous") ->
+                "Current month spend: $spend.\nPrevious month spend: $prev.\nDifference is based on these totals only."
+            else ->
+                "Current spend is $spend.\nTop category: $topCategory.\nTop merchant: $topMerchant."
+        }
     }
 
     /**
@@ -116,6 +138,15 @@ Consider budgeting for high-frequency merchants to optimize expenses."""
             ?.removePrefix("- ")
             ?.trim()
             ?.substringBefore(":")
+            ?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun String.keyValue(key: String): String? {
+        val prefix = "$key="
+        return lines()
+            .firstOrNull { it.trim().startsWith(prefix) }
+            ?.substringAfter(prefix)
+            ?.trim()
             ?.takeIf { it.isNotEmpty() }
     }
 }
