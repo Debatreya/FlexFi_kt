@@ -1,5 +1,7 @@
 package com.example.flexfi.ai
 
+import com.example.flexfi.flexcard.FlexCardLLMResponse
+
 /**
  * Generates rule-based fallback insights when LLM is unavailable.
  * All insights are deterministic: same data hash always produces same insights.
@@ -119,6 +121,17 @@ Consider budgeting for high-frequency merchants to optimize expenses."""
         return templates.toList()
     }
 
+    fun getFlexCardFallback(dataHash: Long): FlexCardLLMResponse {
+        val insights = getInsights(dataHash).map { it.limitWords(12) }.take(3)
+        val improvement = "Lower frequent small spends in your top category".limitWords(12)
+        val tagline = "You are building stronger money habits one day at a time".limitWords(12)
+        return FlexCardLLMResponse(
+            highlights = insights,
+            improvement = improvement,
+            tagline = tagline
+        )
+    }
+
     private fun String.lineValue(label: String): String? {
         val prefix = "- $label:"
         return lines()
@@ -148,5 +161,10 @@ Consider budgeting for high-frequency merchants to optimize expenses."""
             ?.substringAfter(prefix)
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun String.limitWords(maxWords: Int): String {
+        val words = trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        return words.take(maxWords).joinToString(" ")
     }
 }

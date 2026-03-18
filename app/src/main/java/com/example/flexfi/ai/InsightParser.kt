@@ -1,5 +1,8 @@
 package com.example.flexfi.ai
 
+import com.example.flexfi.flexcard.FlexCardLLMResponse
+import org.json.JSONObject
+
 /**
  * Parses LLM responses into validated, structured output.
  * Handles edge cases gracefully with fallback to malformed data recovery.
@@ -151,6 +154,58 @@ object InsightParser {
      */
     fun generateDataHash(text: String): Long {
         return text.hashCode().toLong()
+    }
+
+    /**
+     * Parses strict JSON output for Flex Card content.
+     */
+    fun parseFlexCardResponse(llmResponse: String?): FlexCardLLMResponse? {
+        if (llmResponse.isNullOrBlank()) return null
+
+        val normalized = sanitizeOutput(llmResponse)
+        val jsonPayload = extractJsonObject(normalized) ?: return null
+
+        return runCatching {
+            val root = JSONObject(jsonPayload)
+            val highlightsArray = root.optJSONArray("highlights") ?: return null
+            val highlights = buildList {
+                for (i in 0 until highlightsArray.length()) {
+                    add(highlightsArray.optString(i).trim())
+                }
+            }
+            val improvement = root.optString("improvement").trim()
+            val tagline = root.optString("tagline").trim()
+
+            val parsed = FlexCardLLMResponse(
+                highlights = highlights,
+                improvement = improvement,
+                tagline = tagline
+            )
+
+            parsed.takeIf { validateFlexCardResponse(it) }
+        }.getOrNull()
+    }
+
+    fun validateFlexCardResponse(response: FlexCardLLMResponse): Boolean {
+        if (response.highlights.size != 3) return false
+        if (response.improvement.isBlank()) return false
+        if (response.tagline.isBlank()) return false
+
+        val allLines = response.highlights + response.improvement + response.tagline
+        return allLines.all { line ->
+            val words = line
+                .trim()
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+            words.isNotEmpty() && words.size <= 12
+        }
+    }
+
+    private fun extractJsonObject(text: String): String? {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start == -1 || end == -1 || end <= start) return null
+        return text.substring(start, end + 1)
     }
 
     private fun sanitizeOutput(text: String): String {

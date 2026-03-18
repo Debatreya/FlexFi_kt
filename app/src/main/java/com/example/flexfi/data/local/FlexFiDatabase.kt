@@ -24,7 +24,7 @@ import com.example.flexfi.data.local.entities.*
         RecurringTransactionEntity::class,
         AIInsightEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class FlexFiDatabase : RoomDatabase() {

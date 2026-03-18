@@ -1,10 +1,12 @@
 package com.example.flexfi.data.repository
 
+import com.example.flexfi.flexcard.FlexCardLLMResponse
 import com.example.flexfi.data.local.dao.AIInsightDao
 import com.example.flexfi.data.local.entities.AIInsightEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 
 class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
@@ -12,6 +14,7 @@ class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
     private companion object {
         const val CACHE_TYPE_INSIGHTS = "INSIGHTS"
         const val CACHE_TYPE_EXPLAIN = "EXPLAIN"
+        const val CACHE_TYPE_FLEX_CARD = "FLEX_CARD"
     }
 
     /**
@@ -80,6 +83,39 @@ class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
         aiInsightDao.insertOrUpdate(entity)
     }
 
+    suspend fun getFlexCardIfValid(dataHash: Long, monthKey: String): FlexCardLLMResponse? = withContext(Dispatchers.IO) {
+        val monthlyHash = monthlyHash(dataHash, monthKey)
+        val cached = aiInsightDao.getByDataHashAndType(monthlyHash, CACHE_TYPE_FLEX_CARD) ?: return@withContext null
+
+        if (cached.expiresAt > System.currentTimeMillis()) {
+            return@withContext deserializeFlexCard(cached.content)
+        }
+
+        aiInsightDao.deleteExpired(System.currentTimeMillis())
+        null
+    }
+
+    suspend fun cacheFlexCard(
+        response: FlexCardLLMResponse,
+        dataHash: Long,
+        monthKey: String
+    ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val expiresAt = now + (31L * 24L * 60L * 60L * 1000L)
+        val monthlyHash = monthlyHash(dataHash, monthKey)
+
+        val entity = AIInsightEntity(
+            id = UUID.randomUUID().toString(),
+            content = serializeFlexCard(response),
+            dataHash = monthlyHash,
+            cacheType = CACHE_TYPE_FLEX_CARD,
+            generatedAt = now,
+            expiresAt = expiresAt
+        )
+
+        aiInsightDao.insertOrUpdate(entity)
+    }
+
     /**
      * Clear all cached insights manually
      */
@@ -121,5 +157,37 @@ class AIInsightRepository(private val aiInsightDao: AIInsightDao) {
             // Backward compatibility with earlier "|" serialization.
             serialized.split("|")
         }
+    }
+
+    private fun serializeFlexCard(response: FlexCardLLMResponse): String {
+        return JSONObject().apply {
+            put("highlights", JSONArray().apply {
+                response.highlights.forEach { put(it) }
+            })
+            put("improvement", response.improvement)
+            put("tagline", response.tagline)
+        }.toString()
+    }
+
+    private fun deserializeFlexCard(serialized: String): FlexCardLLMResponse? {
+        return runCatching {
+            val root = JSONObject(serialized)
+            val highlightsArray = root.optJSONArray("highlights") ?: return null
+            val highlights = buildList {
+                for (i in 0 until highlightsArray.length()) {
+                    add(highlightsArray.optString(i).trim())
+                }
+            }
+
+            FlexCardLLMResponse(
+                highlights = highlights,
+                improvement = root.optString("improvement").trim(),
+                tagline = root.optString("tagline").trim()
+            )
+        }.getOrNull()
+    }
+
+    private fun monthlyHash(dataHash: Long, monthKey: String): Long {
+        return "$dataHash|$monthKey".hashCode().toLong()
     }
 }

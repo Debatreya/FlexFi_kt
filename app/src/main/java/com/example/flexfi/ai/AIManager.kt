@@ -2,6 +2,7 @@ package com.example.flexfi.ai
 
 import android.util.Log
 import android.os.SystemClock
+import com.example.flexfi.flexcard.FlexCardLLMResponse
 import com.example.flexfi.data.repository.AIInsightRepository
 import com.example.flexfi.data.repository.ExpenseRepository
 import com.example.flexfi.data.repository.PersonalExpenseRepository
@@ -35,9 +36,11 @@ class AIManager(
         private const val INSIGHTS_MAX_TOKENS = 128
         private const val EXPLAIN_MAX_TOKENS = 384
         private const val ASSISTANT_MAX_TOKENS = 256
+        private const val FLEX_CARD_MAX_TOKENS = 220
         private const val INSIGHTS_TEMPERATURE = 0.2f
         private const val EXPLAIN_TEMPERATURE = 0.2f
         private const val ASSISTANT_TEMPERATURE = 0.3f
+        private const val FLEX_CARD_TEMPERATURE = 0.2f
         private const val ASSISTANT_MAX_QUESTION_CHARS = 220
     }
 
@@ -339,6 +342,59 @@ AIManager Diagnostics:
         }
     }
 
+    /**
+     * Generates strict JSON content for the Flex Card.
+     * Uses monthly cache to avoid repeated inference.
+     */
+    suspend fun generateFlexCardContent(summary: String): FlexCardLLMResponse {
+        return generateFlexCardContent(summary, currentMonthKey())
+    }
+
+    suspend fun generateFlexCardContent(summary: String, monthKey: String): FlexCardLLMResponse {
+        val dataHash = InsightParser.generateDataHash(summary)
+
+        val cached = withContext(Dispatchers.IO) {
+            aiInsightRepository.getFlexCardIfValid(dataHash, monthKey)
+        }
+        if (cached != null && InsightParser.validateFlexCardResponse(cached)) {
+            return cached
+        }
+
+        val prompt = PromptBuilder.buildFlexCardPrompt(summary)
+        val generated = withContext(Dispatchers.Default) {
+            try {
+                if (!modelManager.isModelReady()) {
+                    return@withContext FallbackInsights.getFlexCardFallback(dataHash)
+                }
+
+                val rawResponse = modelManager.generateText(
+                    prompt = prompt,
+                    maxTokens = FLEX_CARD_MAX_TOKENS,
+                    temperature = FLEX_CARD_TEMPERATURE
+                )
+
+                InsightParser.parseFlexCardResponse(rawResponse)
+                    ?: FallbackInsights.getFlexCardFallback(dataHash)
+            } catch (e: Exception) {
+                Log.e(TAG, "Flex Card generation failed", e)
+                FallbackInsights.getFlexCardFallback(dataHash)
+            }
+        }
+
+        val validated = generated.takeIf { InsightParser.validateFlexCardResponse(it) }
+            ?: FallbackInsights.getFlexCardFallback(dataHash)
+
+        withContext(Dispatchers.IO) {
+            runCatching {
+                aiInsightRepository.cacheFlexCard(validated, dataHash, monthKey)
+            }.onFailure {
+                Log.e(TAG, "Failed to cache Flex Card content", it)
+            }
+        }
+
+        return validated
+    }
+
     private suspend fun fetchFinancialContext(userPhone: String?): FinancialContext {
         val safePhone = userPhone ?: ""
         val currentMonth = getMonthRange(0)
@@ -436,5 +492,12 @@ AIManager Diagnostics:
 
     private fun isUsableAssistantQuestion(question: String): Boolean {
         return question.isNotBlank() && question.any { it.isLetterOrDigit() }
+    }
+
+    private fun currentMonthKey(): String {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = calendar.get(Calendar.MONTH) + 1
+        return "%04d-%02d".format(year, month)
     }
 }

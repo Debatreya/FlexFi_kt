@@ -34,6 +34,7 @@ import com.example.flexfi.ui.screens.personal.*
 import com.example.flexfi.ui.screens.profile.*
 import com.example.flexfi.ui.screens.settle.*
 import com.example.flexfi.ui.screens.budget.*
+import com.example.flexfi.ui.screens.flexcard.FlexCardPreviewScreen
 import com.example.flexfi.ui.screens.splash.SplashScreen
 import com.example.flexfi.ui.theme.FlexFiTheme
 import com.example.flexfi.utils.CurrencyProvider
@@ -215,6 +216,9 @@ fun FlexFiApp(
             appSettingsRepository,
             recurringTransactionRepository,
             personalExpenseRepository,
+            budgetRepository,
+            streakRepository,
+            aiManager,
             exchangeRateApi,
             userRepository
         )
@@ -410,7 +414,14 @@ fun FlexFiApp(
                     onBack = { navController.popBackStack() },
                     onOpenExpenses = { navController.navigate("personal_dashboard") },
                     onOpenAnalytics = { navController.navigate("analytics") },
-                    onOpenBudgets = { navController.navigate("budget") }
+                    onOpenBudgets = { navController.navigate("budget") },
+                    onGenerateFlexCard = { navController.navigate("flex_card_preview") }
+                )
+            }
+            composable("flex_card_preview") {
+                FlexCardPreviewScreen(
+                    viewModel = profileViewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable("add_personal_expense") {
@@ -639,6 +650,9 @@ class ProfileViewModelFactory(
     private val appSettingsRepository: AppSettingsRepository,
     private val recurringTransactionRepository: RecurringTransactionRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
+    private val budgetRepository: BudgetRepository,
+    private val streakRepository: StreakRepository,
+    private val aiManager: AIManager,
     private val exchangeRateApi: ExchangeRateApi,
     private val userRepository: UserRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
@@ -649,6 +663,9 @@ class ProfileViewModelFactory(
             settingsRepository = appSettingsRepository,
             recurringRepository = recurringTransactionRepository,
             personalExpenseRepository = personalExpenseRepository,
+            budgetRepository = budgetRepository,
+            streakRepository = streakRepository,
+            aiManager = aiManager,
             exchangeRateApi = exchangeRateApi,
             userRepository = userRepository
         ) as T

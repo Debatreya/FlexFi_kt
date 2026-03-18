@@ -65,6 +65,34 @@ $question""".trimIndent()
     }
 
     /**
+     * Builds a strict JSON-only prompt for Flex Card content generation.
+     */
+    fun buildFlexCardPrompt(dataString: String): String {
+        return """You are a financial insights generator.
+
+Return JSON ONLY with:
+- 3 highlights
+- 1 improvement
+- 1 tagline
+
+Rules:
+- No extra text
+- No explanation
+- Max 12 words per line
+- No hallucinated numbers
+
+Expected JSON shape:
+{
+  "highlights": [],
+  "improvement": "",
+  "tagline": ""
+}
+
+Data:
+$dataString""".trimIndent()
+    }
+
+    /**
      * Optional: Builds a prompt for merchant categorization (future enhancement).
      * Included for reference but not used in Phase 8.
      */
