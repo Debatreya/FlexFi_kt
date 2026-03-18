@@ -18,8 +18,9 @@ class UserRepository(
 
     suspend fun getUser(id: String) = userDao.getUser(id)
 
-    suspend fun syncUser(uid: String) {
-        val firestoreUser = firestoreService.getUser(uid)
+    suspend fun syncUser(uidOrPhone: String) {
+        val firestoreUser = firestoreService.getUser(uidOrPhone)
+            ?: firestoreService.findUserByPhone(uidOrPhone)
         if (firestoreUser != null) {
             val entity = UserEntity(
                 id = firestoreUser.id,

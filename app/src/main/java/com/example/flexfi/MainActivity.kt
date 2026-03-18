@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.room.Room
+import com.example.flexfi.ai.AIManager
+import com.example.flexfi.ai.ModelManager
 import com.example.flexfi.data.local.FlexFiDatabase
 import com.example.flexfi.data.local.entities.AppSettingsEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
@@ -32,6 +34,7 @@ import com.example.flexfi.ui.screens.personal.*
 import com.example.flexfi.ui.screens.profile.*
 import com.example.flexfi.ui.screens.settle.*
 import com.example.flexfi.ui.screens.budget.*
+import com.example.flexfi.ui.screens.flexcard.FlexCardPreviewScreen
 import com.example.flexfi.ui.screens.splash.SplashScreen
 import com.example.flexfi.ui.theme.FlexFiTheme
 import com.example.flexfi.utils.CurrencyProvider
@@ -77,6 +80,22 @@ class MainActivity : ComponentActivity() {
         )
         val budgetGoalRepository = BudgetGoalRepository(db.budgetGoalDao())
         val budgetRepository = BudgetRepository(db.budgetDao())
+        val aiInsightRepository = AIInsightRepository(db.aiInsightDao())
+        val modelManager = ModelManager.getInstance(applicationContext)
+
+        // Initialize AIManager (background download of model on first launch)
+        lifecycleScope.launch(Dispatchers.Default) {
+            modelManager.initialize()
+        }
+
+        // Create AIManager instance
+        val aiManager = AIManager(
+            personalExpenseRepository = personalExpenseRepository,
+            expenseRepository = expenseRepository,
+            streakRepository = streakRepository,
+            aiInsightRepository = aiInsightRepository,
+            modelManager = modelManager
+        )
 
         setContent {
             val settings by appSettingsRepository.getSettings().collectAsState(initial = AppSettingsEntity())
@@ -102,6 +121,7 @@ class MainActivity : ComponentActivity() {
                     appSettingsRepository = appSettingsRepository,
                     recurringTransactionRepository = recurringTransactionRepository,
                     budgetRepository = budgetRepository,
+                    aiManager = aiManager,
                     onLogoutRequested = {
                         lifecycleScope.launch {
                             withContext(Dispatchers.IO) {
@@ -136,12 +156,13 @@ fun FlexFiApp(
     appSettingsRepository: AppSettingsRepository,
     recurringTransactionRepository: RecurringTransactionRepository,
     budgetRepository: BudgetRepository,
+    aiManager: AIManager,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
 
     val homeViewModel: HomeViewModel = viewModel(
-        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository, contactRepository)
+        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository, contactRepository, aiManager)
     )
 
     val authViewModel: AuthViewModel = viewModel(
@@ -195,6 +216,9 @@ fun FlexFiApp(
             appSettingsRepository,
             recurringTransactionRepository,
             personalExpenseRepository,
+            budgetRepository,
+            streakRepository,
+            aiManager,
             exchangeRateApi,
             userRepository
         )
@@ -390,7 +414,14 @@ fun FlexFiApp(
                     onBack = { navController.popBackStack() },
                     onOpenExpenses = { navController.navigate("personal_dashboard") },
                     onOpenAnalytics = { navController.navigate("analytics") },
-                    onOpenBudgets = { navController.navigate("budget") }
+                    onOpenBudgets = { navController.navigate("budget") },
+                    onGenerateFlexCard = { navController.navigate("flex_card_preview") }
+                )
+            }
+            composable("flex_card_preview") {
+                FlexCardPreviewScreen(
+                    viewModel = profileViewModel,
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable("add_personal_expense") {
@@ -486,7 +517,8 @@ class HomeViewModelFactory(
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
     private val appSettingsRepository: AppSettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val aiManager: AIManager
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -498,7 +530,8 @@ class HomeViewModelFactory(
             personalExpenseRepository,
             streakRepository,
             appSettingsRepository,
-            contactRepository
+            contactRepository,
+            aiManager
         ) as T
     }
 }
@@ -617,6 +650,9 @@ class ProfileViewModelFactory(
     private val appSettingsRepository: AppSettingsRepository,
     private val recurringTransactionRepository: RecurringTransactionRepository,
     private val personalExpenseRepository: PersonalExpenseRepository,
+    private val budgetRepository: BudgetRepository,
+    private val streakRepository: StreakRepository,
+    private val aiManager: AIManager,
     private val exchangeRateApi: ExchangeRateApi,
     private val userRepository: UserRepository
 ) : androidx.lifecycle.ViewModelProvider.Factory {
@@ -627,6 +663,9 @@ class ProfileViewModelFactory(
             settingsRepository = appSettingsRepository,
             recurringRepository = recurringTransactionRepository,
             personalExpenseRepository = personalExpenseRepository,
+            budgetRepository = budgetRepository,
+            streakRepository = streakRepository,
+            aiManager = aiManager,
             exchangeRateApi = exchangeRateApi,
             userRepository = userRepository
         ) as T

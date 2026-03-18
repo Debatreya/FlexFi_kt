@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -83,7 +84,8 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onOpenExpenses: () -> Unit,
     onOpenAnalytics: () -> Unit,
-    onOpenBudgets: () -> Unit
+    onOpenBudgets: () -> Unit,
+    onGenerateFlexCard: () -> Unit
 ) {
     val settings by viewModel.settings.collectAsState()
     val recurring by viewModel.recurring.collectAsState()
@@ -153,10 +155,23 @@ fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        FlexFiAvatar(name = currentUser?.name ?: "You", imageUrl = settings.profilePhotoUri)
+                        FlexFiAvatar(
+                            name = currentUser?.name?.takeIf { it.isNotBlank() }
+                                ?: currentUser?.email?.substringBefore("@")
+                                ?: currentUser?.phone
+                                ?: "You",
+                            imageUrl = settings.profilePhotoUri
+                        )
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
-                            Text("Change Photo")
+                        Column(horizontalAlignment = Alignment.End) {
+                            TextButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) {
+                                Text("Change Photo")
+                            }
+                            TextButton(onClick = onGenerateFlexCard) {
+                                Icon(Icons.Default.Style, contentDescription = null)
+                                Spacer(Modifier.size(6.dp))
+                                Text("Generate Flex Card")
+                            }
                         }
                     }
 

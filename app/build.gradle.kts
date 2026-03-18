@@ -10,12 +10,19 @@ android {
     namespace = "com.example.flexfi"
     compileSdk = 36
 
+    val modelDownloadUrl = (project.findProperty("MODEL_DOWNLOAD_URL") as String?)
+        ?: "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task?download=true"
+    val huggingFaceToken = (project.findProperty("HUGGING_FACE_TOKEN") as String?) ?: ""
+
     defaultConfig {
         applicationId = "com.example.flexfi"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "MODEL_DOWNLOAD_URL", "\"${modelDownloadUrl.replace("\"", "\\\"")}\"")
+        buildConfigField("String", "HUGGING_FACE_TOKEN", "\"${huggingFaceToken.replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -38,6 +45,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -66,6 +74,9 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    
+    // MediaPipe LLM Inference (on-device AI)
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -10,6 +10,8 @@ class StreakRepository(private val streakDao: StreakDao) {
 
     fun getStreak(userId: String): Flow<StreakEntity?> = streakDao.getStreakFlow(userId)
 
+    suspend fun getStreakSync(userId: String): StreakEntity? = streakDao.getStreakSync(userId)
+
     /**
      * Updates the user's streak based on the current date.
      * Call this after a successful expense creation.

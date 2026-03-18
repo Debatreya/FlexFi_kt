@@ -2,7 +2,7 @@
 
 ## Version
 
-Current workspace build, March 2026
+Current workspace build, March 2026 (Phase 10)
 
 ## 1. Overview
 
@@ -13,6 +13,8 @@ FlexFi helps you manage:
 - Budgets and goals
 - Recurring transactions
 - Analytics and trends
+- On-device AI insights
+- Flex Card social sharing
 
 ## 2. Sign In and Profile Setup
 
@@ -24,6 +26,7 @@ FlexFi helps you manage:
    - Current bank balance
 
 You can edit your name/email later from Profile.
+Profile now syncs your stored identity from Firestore into local app data when available.
 
 ## 3. Navigation
 
@@ -114,7 +117,37 @@ Path: Profile -> Open Analytics and Trends
 
 Includes monthly totals, category patterns, and trend views.
 
-## 12. Troubleshooting
+## 12. AI Insights
+
+Path: Home
+
+Capabilities:
+- Monthly AI highlights generated from local financial summary
+- Explain My Spending response
+- Fallback insights while model is unavailable/downloading
+
+## 13. Flex Card (Shareable Financial Identity)
+
+Path: Profile -> Generate Flex Card
+
+What it includes:
+- FlexFi Score (0-100)
+- Grade + trend
+- Highlights
+- Areas for improvement
+- Monthly spend and streak
+- Motivational tagline
+
+Template options:
+- Dark
+- Gradient
+- Minimal
+
+Actions:
+- Regenerate card content
+- Share card as PNG via system share sheet
+
+## 14. Troubleshooting
 
 ### Settlement amount is incorrect
 
@@ -137,9 +170,22 @@ Includes monthly totals, category patterns, and trend views.
 1. Ensure profile setup completed.
 2. Open Profile and save name once.
 
-## 13. Best Practices
+### Flex Card shows generic user label
+
+1. Reopen Profile with internet once to sync remote identity.
+2. Confirm name/email exists in profile fields.
+3. Regenerate card.
+
+### Flex Card layout looks crowded
+
+1. Switch template and regenerate.
+2. Ensure latest app build is installed.
+3. Verify preview uses updated renderer layout.
+
+## 15. Best Practices
 
 1. Set bank balance baseline early.
 2. Use consistent contact phone formatting.
 3. Review Settle Up pending approvals regularly.
 4. Keep display currency stable while auditing numbers.
+5. Generate Flex Card after monthly data has stabilized for best insight quality.

@@ -21,9 +21,10 @@ import com.example.flexfi.data.local.entities.*
         AppSettingsEntity::class,
         BudgetEntity::class,
         GoalContributionEntity::class,
-        RecurringTransactionEntity::class
+        RecurringTransactionEntity::class,
+        AIInsightEntity::class
     ],
-    version = 14,
+    version = 17,
     exportSchema = false
 )
 abstract class FlexFiDatabase : RoomDatabase() {
@@ -39,4 +40,5 @@ abstract class FlexFiDatabase : RoomDatabase() {
     abstract fun appSettingsDao(): AppSettingsDao
     abstract fun recurringTransactionDao(): RecurringTransactionDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun aiInsightDao(): AIInsightDao
 }

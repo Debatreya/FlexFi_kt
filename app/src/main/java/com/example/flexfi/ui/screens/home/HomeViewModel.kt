@@ -2,6 +2,9 @@ package com.example.flexfi.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.flexfi.ai.AIManager
+import com.example.flexfi.ai.ModelDownloadState
+import com.example.flexfi.ai.ModelDownloadStatus
 import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
@@ -15,9 +18,12 @@ import com.example.flexfi.data.repository.PersonalExpenseRepository
 import com.example.flexfi.data.repository.StreakRepository
 import com.example.flexfi.data.repository.UserRepository
 import com.example.flexfi.data.repository.ContactRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class DashboardBalances(
@@ -46,11 +52,13 @@ class HomeViewModel(
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
     private val appSettingsRepository: AppSettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val aiManager: AIManager
 ) : ViewModel() {
 
     private val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: ""
 
+    // ─────── EXISTING STATE ───────
     private val _streak = MutableStateFlow<StreakEntity?>(null)
     val streak: StateFlow<StreakEntity?> = _streak.asStateFlow()
 
@@ -63,6 +71,40 @@ class HomeViewModel(
     private val _balances = MutableStateFlow(DashboardBalances())
     val balances: StateFlow<DashboardBalances> = _balances.asStateFlow()
 
+    // ─────── NEW: AI INSIGHTS STATE ───────
+    private val _aiInsights = MutableStateFlow<List<String>>(emptyList())
+    val aiInsights: StateFlow<List<String>> = _aiInsights.asStateFlow()
+
+    private val _aiExplanation = MutableStateFlow<String?>(null)
+    val aiExplanation: StateFlow<String?> = _aiExplanation.asStateFlow()
+
+    private val _aiLoading = MutableStateFlow(true)
+    val aiLoading: StateFlow<Boolean> = _aiLoading.asStateFlow()
+
+    private val _aiLoadingLabel = MutableStateFlow("Analyzing...")
+    val aiLoadingLabel: StateFlow<String> = _aiLoadingLabel.asStateFlow()
+
+    private val _modelDownloadState = MutableStateFlow(ModelDownloadState())
+    val modelDownloadState: StateFlow<ModelDownloadState> = _modelDownloadState.asStateFlow()
+
+    private val _aiExplainLoading = MutableStateFlow(false)
+    val aiExplainLoading: StateFlow<Boolean> = _aiExplainLoading.asStateFlow()
+
+    private val _aiExplainError = MutableStateFlow<String?>(null)
+    val aiExplainError: StateFlow<String?> = _aiExplainError.asStateFlow()
+
+    private val _assistantQuestion = MutableStateFlow("")
+    val assistantQuestion: StateFlow<String> = _assistantQuestion.asStateFlow()
+
+    private val _assistantResponse = MutableStateFlow<String?>(null)
+    val assistantResponse: StateFlow<String?> = _assistantResponse.asStateFlow()
+
+    private val _assistantLoading = MutableStateFlow(false)
+    val assistantLoading: StateFlow<Boolean> = _assistantLoading.asStateFlow()
+
+    private val _assistantError = MutableStateFlow<String?>(null)
+    val assistantError: StateFlow<String?> = _assistantError.asStateFlow()
+
     private var settingsBankBalanceBase: Double = 0.0
     private var openingBankBalanceBase: Double = 0.0
     private var balanceAnchorMillis: Long = 0L
@@ -70,12 +112,33 @@ class HomeViewModel(
     private var cachedGroupExpenses: List<ExpenseEntity> = emptyList()
     private var cachedSettlements: List<SettlementRecordEntity> = emptyList()
     private var cachedGroups: List<GroupEntity> = emptyList()
+    private var cachedStreakDays: Int = 0
+
+    private var aiDataSignature: Long? = null
+    private var aiFirstLoadTriggered = false
+    private var aiInsightsJob: Job? = null
+    private var aiDebounceJob: Job? = null
+    private var aiExplainJob: Job? = null
+    private var assistantJob: Job? = null
 
     val currentUserFlow = userRepository.getCurrentUserFlow()
 
     init {
         loadDashboardData()
         syncAllData()
+        observeModelState()
+        triggerInsightsIfNeeded(force = true)
+    }
+
+    private fun observeModelState() {
+        viewModelScope.launch {
+            aiManager.modelDownloadState.collectLatest { state ->
+                _modelDownloadState.value = state
+                if (_aiLoading.value && !aiFirstLoadTriggered && state.status == ModelDownloadStatus.READY) {
+                    triggerInsightsIfNeeded(force = true)
+                }
+            }
+        }
     }
 
     private fun syncAllData() {
@@ -104,6 +167,8 @@ class HomeViewModel(
         viewModelScope.launch {
             streakRepository.getStreak(currentUserPhone).collect { streakEntity ->
                 _streak.value = streakEntity
+                cachedStreakDays = streakEntity?.currentStreak ?: 0
+                triggerInsightsIfNeeded()
             }
         }
 
@@ -112,6 +177,7 @@ class HomeViewModel(
             personalExpenseRepository.getExpenses(currentUserPhone).collect { expenses ->
                 cachedPersonalExpenses = expenses
                 recalculateAndPersistTotalBalance()
+                triggerInsightsIfNeeded()
             }
         }
 
@@ -136,6 +202,7 @@ class HomeViewModel(
             expenseRepository.getSettlementsForUser(currentUserPhone)?.collect { records ->
                 cachedSettlements = records
                 recalculateAndPersistTotalBalance()
+                triggerInsightsIfNeeded()
             }
         }
 
@@ -256,5 +323,144 @@ class HomeViewModel(
                 appSettingsRepository.saveSettings(latest.copy(currentBankBalance = derivedBalance))
             }
         }
+    }
+
+    // ─────── AI INSIGHTS METHODS ───────
+
+    /**
+     * Generates AI insights for the current month.
+     * Runs asynchronously; results emitted to aiInsights StateFlow.
+     */
+    private fun generateAIInsights() {
+        if (currentUserPhone.isBlank()) return
+
+        aiInsightsJob?.cancel()
+        _aiLoading.value = true
+        _aiLoadingLabel.value = "Analyzing..."
+        aiInsightsJob = viewModelScope.launch {
+            try {
+                aiManager.generateInsights(currentUserPhone).collect { insights ->
+                    _aiInsights.value = insights
+                    _aiLoading.value = false
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "AI insights error", e)
+                _aiLoading.value = false
+                _aiInsights.value = emptyList()
+            }
+        }
+    }
+
+    /**
+     * Generates an explanation of the user's spending.
+     * Call this when user taps "Explain My Spending" button.
+     */
+    fun explainSpending() {
+        if (currentUserPhone.isBlank()) return
+
+        if (!aiManager.isReady()) {
+            _aiExplainError.value = "Model is not ready yet. Please retry in a moment."
+            return
+        }
+
+        _aiExplainLoading.value = true
+        _aiLoadingLabel.value = "Analyzing..."
+        _aiExplainError.value = null
+        _aiExplanation.value = null
+        aiExplainJob?.cancel()
+        aiExplainJob = viewModelScope.launch {
+            try {
+                aiManager.explainSpending(currentUserPhone).collect { explanation ->
+                    _aiExplanation.value = explanation
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "AI explanation error", e)
+                _aiExplanation.value = null
+                _aiExplainError.value = "Inference failed. Please retry."
+            } finally {
+                _aiExplainLoading.value = false
+            }
+        }
+    }
+
+    fun retryExplain() {
+        explainSpending()
+    }
+
+    fun submitAssistantQuestion(question: String) {
+        val trimmed = question.trim()
+        _assistantQuestion.value = trimmed
+
+        if (trimmed.isBlank()) {
+            _assistantError.value = "Enter a question to continue."
+            return
+        }
+
+        if (!aiManager.isReady()) {
+            _assistantError.value = "Model is not ready yet. Please retry in a moment."
+            return
+        }
+
+        _assistantLoading.value = true
+        _aiLoadingLabel.value = "Thinking..."
+        _assistantError.value = null
+        _assistantResponse.value = null
+
+        assistantJob?.cancel()
+        assistantJob = viewModelScope.launch {
+            try {
+                val response = aiManager.askAssistant(trimmed, currentUserPhone)
+                _assistantResponse.value = response
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Assistant generation error", e)
+                _assistantError.value = "Inference failed. Please retry."
+            } finally {
+                _assistantLoading.value = false
+            }
+        }
+    }
+
+    fun retryAssistant() {
+        submitAssistantQuestion(_assistantQuestion.value)
+    }
+
+    fun clearAssistantState() {
+        _assistantQuestion.value = ""
+        _assistantResponse.value = null
+        _assistantError.value = null
+        _assistantLoading.value = false
+    }
+
+    private fun triggerInsightsIfNeeded(force: Boolean = false) {
+        if (currentUserPhone.isBlank()) return
+
+        val newSignature = calculateAiDataSignature()
+        val shouldGenerate = force || !aiFirstLoadTriggered || aiDataSignature != newSignature
+        if (!shouldGenerate) return
+
+        aiDebounceJob?.cancel()
+        aiDebounceJob = viewModelScope.launch {
+            delay(400)
+            aiDataSignature = newSignature
+            aiFirstLoadTriggered = true
+            generateAIInsights()
+        }
+    }
+
+    private fun calculateAiDataSignature(): Long {
+        val personalSum = cachedPersonalExpenses.sumOf { it.baseAmount }
+        val settlementSum = cachedSettlements.sumOf { it.amount }
+        val latestPersonal = cachedPersonalExpenses.maxOfOrNull { it.createdAt } ?: 0L
+        val latestSettlement = cachedSettlements.maxOfOrNull { it.createdAt } ?: 0L
+
+        return listOf(
+            cachedPersonalExpenses.size,
+            cachedSettlements.size,
+            cachedStreakDays,
+            personalSum.toInt(),
+            settlementSum.toInt(),
+            latestPersonal,
+            latestSettlement
+        ).joinToString("|").hashCode().toLong()
     }
 }

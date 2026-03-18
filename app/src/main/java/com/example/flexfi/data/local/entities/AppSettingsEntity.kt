@@ -11,5 +11,6 @@ data class AppSettingsEntity(
     val displayCurrency: String = "INR",
     val monthlyIncome: Double = 0.0,
     val currentBankBalance: Double = 0.0,
-    val profilePhotoUri: String? = null
+    val profilePhotoUri: String? = null,
+    val flexCardTemplate: String = "DARK"
 )
