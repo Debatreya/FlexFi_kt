@@ -23,6 +23,7 @@ import com.example.flexfi.ui.components.*
 import com.example.flexfi.ui.theme.*
 import com.example.flexfi.utils.CurrencyProvider
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -39,7 +40,12 @@ fun HomeScreen(
     val activeGroups by viewModel.activeGroups.collectAsState()
     val recentActivity by viewModel.recentActivity.collectAsState()
     val streak by viewModel.streak.collectAsState()
+    val aiInsights by viewModel.aiInsights.collectAsState()
+    val aiExplanation by viewModel.aiExplanation.collectAsState()
+    val aiLoading by viewModel.aiLoading.collectAsState()
+    val modelDownloadState by viewModel.modelDownloadState.collectAsState()
     var selectedTab by remember { mutableStateOf(BottomNavTab.HOME) }
+    var showExplainSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -146,6 +152,20 @@ fun HomeScreen(
                         Text("Goals", fontSize = 13.sp)
                     }
                 }
+            }
+
+            // AI Insights Card
+            item {
+                AIInsightsCard(
+                    insights = aiInsights,
+                    isLoading = aiLoading,
+                    modelStatusMessage = modelDownloadState.message,
+                    modelProgressPercent = modelDownloadState.progressPercent,
+                    onExplainClick = {
+                        showExplainSheet = true
+                        viewModel.explainSpending()
+                    }
+                )
             }
 
             // Active Groups
@@ -273,6 +293,54 @@ fun HomeScreen(
                         iconTint = iconColor
                     )
                 }
+            }
+        }
+    }
+
+    // ─────── EXPLANATION BOTTOM SHEET ───────
+    if (showExplainSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showExplainSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Your Spending Summary",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                if (aiExplanation != null) {
+                    Text(
+                        text = aiExplanation ?: "Loading...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                } else {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { showExplainSheet = false },
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .height(40.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Close", fontSize = 14.sp)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

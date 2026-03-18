@@ -20,6 +20,26 @@ FlexFi is now in a product-hardening stage focused on trust in balances, settlem
 
 ## Phase 8 Stabilization (March 2026)
 
+### F. On-device AI insights integration (MediaPipe LLM)
+
+- Added `AIManager` layer between `HomeViewModel` and on-device model runtime.
+- Implemented monthly summary prompt pipeline with deterministic 3-insight parsing.
+- Added "Explain My Spending" flow with fallback explanation path.
+- Added local cache for generated insights keyed by summary hash.
+- Added resilient model download pipeline:
+- Runtime download from configured model URL
+- Progress state surfaced in Home UI
+- Retry with exponential backoff on failures
+- 401 unauthorized handling with clear log guidance
+
+### G. Runtime validation on physical device
+
+- Model download now starts and progresses on real device (no longer stuck at unauthorized URL state).
+- Dashboard shows fallback insights while model is downloading, then switches to model-backed outputs once ready.
+- AI inference works end-to-end, including explanation generation.
+- On older 4G Android hardware, first inference is slow (tens of seconds), which is expected for 1B on-device models.
+- Current behavior is functionally correct; performance optimization is an open tuning task.
+
 ### A. Settlement integrity and currency correctness
 
 - Fixed Settle All path to avoid re-converting already base-currency debt values.
@@ -50,9 +70,12 @@ FlexFi is now in a product-hardening stage focused on trust in balances, settlem
 
 - File-level static error checks on edited Kotlin files: clean.
 - Build command intentionally not run in terminal (project workflow: validate in Android Studio).
+- Android Studio device run: AI download + inference path verified through logs and UI state transitions.
 
 ## Open Follow-ups
 
 1. Add historical reconciliation utility for legacy settlement/phone-format data.
 2. Add instrumentation tests for settle aggregation and cross-screen consistency.
 3. Add migration-safe normalization for old contact/phone entries.
+4. Add release-safe model distribution path that does not require embedding any Hugging Face token.
+5. Add optional warmup and prompt-size trimming for faster first-token latency on low-end devices.

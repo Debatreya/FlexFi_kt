@@ -17,6 +17,8 @@ Recent fixes include:
 - Settlement aggregation by canonical phone to avoid duplicate person rows
 - Group settle page sync improvements (expenses + settlements refreshed before calculation)
 - Profile identity support (signup name visible and editable)
+- On-device AI Insights engine (MediaPipe LLM) integrated on Home
+- Runtime model download with progress + retry/fallback handling
 
 ## Tech Stack
 
@@ -48,6 +50,15 @@ Recent fixes include:
 - QA/support checks: SUPPORT_GUIDE.md
 
 ## Changelog
+
+### 2026-03-19 - Phase 8 AI Runtime Activation
+
+- Enabled on-device LLM insights and explanation flow from Home screen.
+- Added AIManager orchestration, prompt pipeline, and deterministic parsing.
+- Added local insight caching and rule-based fallback system.
+- Added model download progress UI and retry/backoff behavior.
+- Confirmed physical-device runtime behavior: download and inference now functional.
+- Noted expected latency on older devices during first inference.
 
 ### 2026-03-17 - Settlement and Profile Reliability Update
 

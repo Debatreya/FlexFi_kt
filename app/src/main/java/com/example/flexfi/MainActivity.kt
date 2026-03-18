@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.room.Room
+import com.example.flexfi.ai.AIManager
+import com.example.flexfi.ai.ModelManager
 import com.example.flexfi.data.local.FlexFiDatabase
 import com.example.flexfi.data.local.entities.AppSettingsEntity
 import com.example.flexfi.data.remote.FirebaseAuthService
@@ -77,6 +79,22 @@ class MainActivity : ComponentActivity() {
         )
         val budgetGoalRepository = BudgetGoalRepository(db.budgetGoalDao())
         val budgetRepository = BudgetRepository(db.budgetDao())
+        val aiInsightRepository = AIInsightRepository(db.aiInsightDao())
+        val modelManager = ModelManager.getInstance(applicationContext)
+
+        // Initialize AIManager (background download of model on first launch)
+        lifecycleScope.launch {
+            modelManager.initialize()
+        }
+
+        // Create AIManager instance
+        val aiManager = AIManager(
+            personalExpenseRepository = personalExpenseRepository,
+            expenseRepository = expenseRepository,
+            streakRepository = streakRepository,
+            aiInsightRepository = aiInsightRepository,
+            modelManager = modelManager
+        )
 
         setContent {
             val settings by appSettingsRepository.getSettings().collectAsState(initial = AppSettingsEntity())
@@ -102,6 +120,7 @@ class MainActivity : ComponentActivity() {
                     appSettingsRepository = appSettingsRepository,
                     recurringTransactionRepository = recurringTransactionRepository,
                     budgetRepository = budgetRepository,
+                    aiManager = aiManager,
                     onLogoutRequested = {
                         lifecycleScope.launch {
                             withContext(Dispatchers.IO) {
@@ -136,12 +155,13 @@ fun FlexFiApp(
     appSettingsRepository: AppSettingsRepository,
     recurringTransactionRepository: RecurringTransactionRepository,
     budgetRepository: BudgetRepository,
+    aiManager: AIManager,
     onLogoutRequested: () -> Unit
 ) {
     val navController = rememberNavController()
 
     val homeViewModel: HomeViewModel = viewModel(
-        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository, contactRepository)
+        factory = HomeViewModelFactory(authService, userRepository, groupRepository, expenseRepository, personalExpenseRepository, streakRepository, appSettingsRepository, contactRepository, aiManager)
     )
 
     val authViewModel: AuthViewModel = viewModel(
@@ -486,7 +506,8 @@ class HomeViewModelFactory(
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
     private val appSettingsRepository: AppSettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val aiManager: AIManager
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
@@ -498,7 +519,8 @@ class HomeViewModelFactory(
             personalExpenseRepository,
             streakRepository,
             appSettingsRepository,
-            contactRepository
+            contactRepository,
+            aiManager
         ) as T
     }
 }

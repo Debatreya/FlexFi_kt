@@ -2,6 +2,9 @@ package com.example.flexfi.ui.screens.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.flexfi.ai.AIManager
+import com.example.flexfi.ai.ModelDownloadState
+import com.example.flexfi.ai.ModelDownloadStatus
 import com.example.flexfi.data.local.entities.ExpenseEntity
 import com.example.flexfi.data.local.entities.GroupEntity
 import com.example.flexfi.data.local.entities.PersonalExpenseEntity
@@ -18,6 +21,7 @@ import com.example.flexfi.data.repository.ContactRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class DashboardBalances(
@@ -46,11 +50,13 @@ class HomeViewModel(
     private val personalExpenseRepository: PersonalExpenseRepository,
     private val streakRepository: StreakRepository,
     private val appSettingsRepository: AppSettingsRepository,
-    private val contactRepository: ContactRepository
+    private val contactRepository: ContactRepository,
+    private val aiManager: AIManager
 ) : ViewModel() {
 
     private val currentUserPhone = authService.getCurrentUser()?.phoneNumber ?: ""
 
+    // ─────── EXISTING STATE ───────
     private val _streak = MutableStateFlow<StreakEntity?>(null)
     val streak: StateFlow<StreakEntity?> = _streak.asStateFlow()
 
@@ -62,6 +68,19 @@ class HomeViewModel(
 
     private val _balances = MutableStateFlow(DashboardBalances())
     val balances: StateFlow<DashboardBalances> = _balances.asStateFlow()
+
+    // ─────── NEW: AI INSIGHTS STATE ───────
+    private val _aiInsights = MutableStateFlow<List<String>>(emptyList())
+    val aiInsights: StateFlow<List<String>> = _aiInsights.asStateFlow()
+
+    private val _aiExplanation = MutableStateFlow<String?>(null)
+    val aiExplanation: StateFlow<String?> = _aiExplanation.asStateFlow()
+
+    private val _aiLoading = MutableStateFlow(true)
+    val aiLoading: StateFlow<Boolean> = _aiLoading.asStateFlow()
+
+    private val _modelDownloadState = MutableStateFlow(ModelDownloadState())
+    val modelDownloadState: StateFlow<ModelDownloadState> = _modelDownloadState.asStateFlow()
 
     private var settingsBankBalanceBase: Double = 0.0
     private var openingBankBalanceBase: Double = 0.0
@@ -76,6 +95,16 @@ class HomeViewModel(
     init {
         loadDashboardData()
         syncAllData()
+        observeModelState()
+        generateAIInsights()  // Trigger AI insights on dashboard load
+    }
+
+    private fun observeModelState() {
+        viewModelScope.launch {
+            aiManager.modelDownloadState.collectLatest { state ->
+                _modelDownloadState.value = state
+            }
+        }
     }
 
     private fun syncAllData() {
@@ -254,6 +283,51 @@ class HomeViewModel(
             viewModelScope.launch {
                 val latest = appSettingsRepository.getSettingsOnce()
                 appSettingsRepository.saveSettings(latest.copy(currentBankBalance = derivedBalance))
+            }
+        }
+    }
+
+    // ─────── AI INSIGHTS METHODS ───────
+
+    /**
+     * Generates AI insights for the current month.
+     * Runs asynchronously; results emitted to aiInsights StateFlow.
+     */
+    private fun generateAIInsights() {
+        if (currentUserPhone.isBlank()) return
+
+        _aiLoading.value = true
+        viewModelScope.launch {
+            try {
+                aiManager.generateInsights(currentUserPhone).collect { insights ->
+                    _aiInsights.value = insights
+                    _aiLoading.value = modelDownloadState.value.status == ModelDownloadStatus.DOWNLOADING ||
+                        modelDownloadState.value.status == ModelDownloadStatus.LOADING ||
+                        modelDownloadState.value.status == ModelDownloadStatus.RETRYING
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "AI insights error", e)
+                _aiLoading.value = false
+                _aiInsights.value = emptyList()
+            }
+        }
+    }
+
+    /**
+     * Generates an explanation of the user's spending.
+     * Call this when user taps "Explain My Spending" button.
+     */
+    fun explainSpending() {
+        if (currentUserPhone.isBlank()) return
+
+        viewModelScope.launch {
+            try {
+                aiManager.explainSpending(currentUserPhone).collect { explanation ->
+                    _aiExplanation.value = explanation
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "AI explanation error", e)
+                _aiExplanation.value = "Unable to generate explanation"
             }
         }
     }
