@@ -49,6 +49,25 @@ This shows settlement data only for that group.
 - Budgets: Profile -> Open Budgets
 - Goals: Home -> Goals
 
+### AI Insights
+
+Path: Home
+
+You can:
+- View AI-generated monthly highlights
+- Tap Explain My Spending for compact explanation
+- Continue using fallback insights while model is downloading
+
+### Flex Card Share
+
+Path: Profile -> Generate Flex Card
+
+You can:
+- Generate score-backed social card
+- Select template (Dark, Gradient, Minimal)
+- Regenerate content
+- Share as PNG via Android share sheet
+
 ### Recurring
 
 Path: Profile -> Recurring Transactions
@@ -82,3 +101,9 @@ You can edit:
 
 - Open group detail first, then Settle Up.
 - Pull data once by revisiting Home/Groups after network is available.
+
+### Flex Card name shows generic text
+
+- Ensure profile sync has completed after login.
+- Open Profile once with network available.
+- Verify name/email is present and save profile if needed.

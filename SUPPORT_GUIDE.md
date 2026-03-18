@@ -10,6 +10,8 @@ Use this for QA, bug triage, and support reproduction.
 - Settle All and pending approvals
 - Budgets, goals, recurring, analytics
 - Currency and balance integrity
+- AI insights and on-device model behavior
+- Flex Card generation, rendering, and sharing
 
 ## Critical Regression Checks
 
@@ -62,6 +64,37 @@ Expected:
 - Status transitions: PENDING -> COMPLETED or REJECTED.
 - Debt refreshes after action.
 
+### 6. Flex Card identity and content
+
+1. Login with existing phone account.
+2. Open Profile and confirm name/email are visible.
+3. Tap Generate Flex Card.
+
+Expected:
+- Card shows synced user identity, not generic placeholder text.
+- Card contains 3 highlights, 1 improvement, 1 tagline.
+
+### 7. Flex Card layout and visual checks
+
+1. Open Flex Card preview.
+2. Verify sections and spacing.
+3. Switch templates and regenerate.
+
+Expected:
+- Improvement section appears below highlights.
+- Score number has strongest visual emphasis.
+- Grade/trend show semantic color and symbol.
+- Tagline is outside inner rounded card with visible spacing.
+
+### 8. Flex Card share flow
+
+1. From preview, tap Share.
+2. Select target app from chooser.
+
+Expected:
+- Share sheet opens with image/png payload.
+- Receiving app can open attached PNG.
+
 ## Standard Functional Checklist
 
 1. Personal add/edit/delete transaction
@@ -70,6 +103,8 @@ Expected:
 4. Goal creation + contribution
 5. Recurring transaction execution
 6. Analytics view integrity
+7. Home AI insights/explain flow integrity
+8. Flex Card preview/template/share integrity
 
 ## Triage Questions Template
 
@@ -85,3 +120,6 @@ Expected:
 - Duplicate person row: check phone normalization/canonicalization.
 - Empty group settle page: check pre-calculation sync and groupId filtering.
 - Missing profile name: check local user sync and profile identity write path.
+- Flex Card generic name: check Firestore user lookup by uid and phone fallback.
+- Flex Card malformed text blocks: check strict JSON parser fallback path.
+- Flex Card share failure: check FileProvider authority and xml file paths configuration.

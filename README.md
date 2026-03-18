@@ -19,6 +19,8 @@ Recent fixes include:
 - Profile identity support (signup name visible and editable)
 - On-device AI Insights engine (MediaPipe LLM) integrated on Home
 - Runtime model download with progress + retry/fallback handling
+- Flex Card social share pipeline (score + AI content + template rendering + PNG share)
+- Profile sync hardening: user name/email fetched from Firestore into local profile on load
 
 ## Tech Stack
 
@@ -35,6 +37,8 @@ Recent fixes include:
 3. Personal and group expense tracking
 4. Settlement recording and approval
 5. Budget, goals, and recurring transactions
+6. AI insights and spending explanation
+7. Generate Flex Card and share to social apps
 
 ## Currency Model
 
@@ -50,6 +54,18 @@ Recent fixes include:
 - QA/support checks: SUPPORT_GUIDE.md
 
 ## Changelog
+
+### 2026-03-19 - Phase 10 Flex Card System
+
+- Added FlexFi Score engine (0-100) with weighted behavioral model and grade/trend output.
+- Added on-device LLM JSON generation for card content (3 highlights, 1 improvement, 1 tagline).
+- Added strict parser/validator with deterministic fallback content.
+- Added month-aware local cache for Flex Card AI payloads.
+- Added template-driven renderer (Dark, Gradient, Minimal) with profile photo or initials avatar.
+- Added share pipeline: PNG export to cache + ACTION_SEND intent via FileProvider.
+- Added Profile entry action and preview screen with template selection, regenerate, and share.
+- Updated card visual hierarchy and layout (score emphasis, grade/trend symbols/colors, improvement below highlights, tagline outside inner card).
+- Improved profile identity sync path to fetch Firestore user into local profile reliably.
 
 ### 2026-03-19 - Phase 8 AI Runtime Activation
 
