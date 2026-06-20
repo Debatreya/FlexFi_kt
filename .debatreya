@@ -1,0 +1,14 @@
+{
+  "id": "flexfi-kt",
+  "name": "FlexFi",
+  "tagline": "A social expense-splitting app focused on group tracking and shareable spending insights. Basically Flexing Financial Management",
+  "description": "This is the Kotlin implementation of FlexFi, a social expense-splitting project aimed at helping groups track shared spending and generate social-friendly financial insights. The current version focuses on core app foundations and expense management workflows, generating Social media Cards and an App based Local LLM generating insights and answering user queries.",
+  "techStack": ["Kotlin"],
+  "links": {
+    "github": "https://github.com/Debatreya/FlexFi_kt",
+    "demo": ""
+  },
+  "featured": true,
+  "priority": 60,
+  "hasDeepDive": false
+}
